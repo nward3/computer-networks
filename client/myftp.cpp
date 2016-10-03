@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
 
 	// create the socket
 	int s;
-	if((s = socket(PF_INET,SOCK_DGRAM, 0)) < 0){
+	if((s = socket(PF_INET, SOCK_STREAM, 0)) < 0){
 		cout << "socket creation unsuccessful" << endl;
 		exit(1);
 	}
