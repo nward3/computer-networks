@@ -1,9 +1,9 @@
 /*
  * Luke Garrison
  * netid: lgarriso
- * udpclient.cpp
+ * myftp.cpp
  *
- * This program allows the user to connect to a server and send the server data either from a file or text from a command line argument. The server then returns two messages that this program will receieve: the encrypted message with an appended timestamp, and a key to decrypt the message. The encryption key is used to decrypt the message and the decrypted message and the round trip time are then displayed to the user. This client connects to the server via a UDP connection.
+ * This program is the client for an FTP application. It will connect to specified server and enables different FTP commands.
  *
  */
 
@@ -13,11 +13,13 @@
 #include <sstream>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <errno.h>
 using namespace std;
 
 #define MAX_MESSAGE_LENGTH 5000
@@ -58,14 +60,34 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in sin;
 	bzero((char*)&sin, sizeof(sin));
 	sin.sin_family = AF_INET;
-	bcopy(hp->h_addr, (char*)&sin.sin_addr, hp->h_length);
+	bcopy((char*)hp->h_addr, (char*)&sin.sin_addr.s_addr, hp->h_length);
 	sin.sin_port=htons(port);
 
 	// create the socket
 	int s;
-	if((s = socket(PF_INET, SOCK_STREAM, 0)) < 0){
+	if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		cout << "socket creation unsuccessful" << endl;
 		exit(1);
+	}
+
+	// connect to server
+	if (connect(s, (struct sockaddr	*)&sin, sizeof(sin)) < 0) {
+		perror("Connection to server failed");
+		close(s);
+		exit(1);
+	}
+
+
+	// main loop goes here
+	string command;
+	while(1) {
+		cin >> command;
+
+		int sendResult = send(s, command.c_str(), command.length(), 0);
+		if (sendResult == -1) {
+			perror("client failed to send to server");
+			exit(1);
+		}
 	}
 
 	return 0;
