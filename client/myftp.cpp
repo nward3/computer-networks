@@ -20,16 +20,19 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
+#include <dirent.h>
 #include <unordered_set>
 using namespace std;
 
-#define MAX_MESSAGE_LENGTH 5000
+#define MAX_MESSAGE_LENGTH 4096
 
-void sendMessage(int socketDescriptor, string message);
+int sendMessage(int socketDescriptor, string message);
+int recvMessage(int socketDescriptor, char* buf, int buf_size);
 string getCommand(string input);
 bool isValidCommand(string command);
 
 int main(int argc, char* argv[]) {
+
 	string hostname;
 	int port;
 	string textParameter;
@@ -81,6 +84,8 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
+	char buf[MAX_MESSAGE_LENGTH];
+
 	// main loop that interprets commands
 	string input, command;
 	while(1) {
@@ -91,19 +96,46 @@ int main(int argc, char* argv[]) {
 			sendMessage(s, command);
 			close(s);
 			exit(0);
+		} else if (command == "LIS") {
+			sendMessage(s, command);
+			recvMessage(s, buf, sizeof(buf));
+			cout << endl;
+			cout << buf << endl;
+		} else {
+			sendMessage(s, command);
+			recvMessage(s, buf, sizeof(buf));
+			cout << buf << endl;
 		}
+
+		// clear the recv buffer
+		bzero(buf, sizeof(buf));
+
+		cout << endl;
 	}
 
 	return 0;
 }
 
 // sends message to server. Includes error checking
-void sendMessage(int socketDescriptor, string message) {
+int sendMessage(int socketDescriptor, string message) {
 	int sendResult = send(socketDescriptor, message.c_str(), message.length(), 0);
 	if (sendResult == -1) {
 		perror("client failed to send to server");
 		exit(1);
 	}
+
+	return sendResult;
+}
+
+// sends message to server. Includes error checking
+int recvMessage(int socketDescriptor, char* buf, int buf_size) {
+	int recvResult = recv(socketDescriptor, buf, buf_size, 0);
+	if (recvResult == -1) {
+		perror("client failed to send receive data from server");
+		exit(1);
+	}
+
+	return recvResult;
 }
 
 // parses input from command line and returns the command

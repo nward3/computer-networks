@@ -10,7 +10,15 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <dirent.h>
+#include <errno.h>
+#include <unordered_set>
 using namespace std;
+
+int sendMessage(int socketDescriptor, string message);
+int recvMessage(int socketDescriptor, char* buf, int buf_size);
+bool isValidCommand(string command);
+string getDirectoryListing(int socketDescriptor);
 
 int main(int argc, char* argv[]) {
 
@@ -18,7 +26,7 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in server_addr;
 	char buf[4096];
 	socklen_t len;
-	int socketfd, bytesReceived, new_s;
+	int socketfd, bytesReceived, socketDescriptor;
 
 	// check for proper function invocation
 	if (argc != 2) {
@@ -65,20 +73,21 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
-	// loop continuously
+	// allow for client to XIT and reconnect
 	while(1) {
 		
 		// wait for client connection
-		if ((new_s = accept(socketfd, (struct sockaddr *) &server_addr, &len)) < 0) {
+		if ((socketDescriptor = accept(socketfd, (struct sockaddr *) &server_addr, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
 		} else {
 			cout << "new connection established" << endl;
 		}
 
-		// receive client message
+		// receive and process client message
 		while(1) {
-			bytesReceived = recv(new_s, buf, sizeof(buf), 0);
+			bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+
 			if (bytesReceived < 0) {
 				cout << "error: unable to receive client's message" << endl;
 				exit(1);
@@ -87,12 +96,70 @@ int main(int argc, char* argv[]) {
 
 				// process client command
 				string command = buf;
+
+				// clear the recv buffer
 				bzero(buf, sizeof(buf));
+
 				if (command == "XIT") {
-					close(new_s);
+					close(socketDescriptor);
 					break;
+				} else if (command == "LIS") {
+					string dirlisting = getDirectoryListing(socketDescriptor);
+					sendMessage(socketDescriptor, dirlisting);
+				} else {
+					sendMessage(socketDescriptor, string("Invalid FTP command"));
 				}
 			}	
 		}
 	}
+}
+
+// returns a string containing the files and directories in the current directory
+// each file or directory is separated by a newline
+string getDirectoryListing(int socketDescriptor) {
+	DIR *dir;
+	struct dirent *ent;
+	string dirlisting;
+
+	if ((dir = opendir (".")) != NULL) {
+		/* iterate over all the files and directories within directory */
+		while ((ent = readdir (dir)) != NULL) {
+			dirlisting += (ent->d_name + string("\n"));
+		}
+		closedir(dir);
+
+		return dirlisting;
+	} else {
+		/* could not open directory */
+		return string(strerror(errno));
+	}
+}
+
+// sends message to server. Includes error checking
+int sendMessage(int socketDescriptor, string message) {
+	int sendResult = send(socketDescriptor, message.c_str(), message.length(), 0);
+	if (sendResult == -1) {
+		perror("client failed to send to server");
+		exit(1);
+	}
+
+	return sendResult;
+}
+
+// sends message to server. Includes error checking
+int recvMessage(int socketDescriptor, char* buf, int buf_size) {
+	int recvResult = recv(socketDescriptor, buf, sizeof(buf), 0);
+	if (recvResult == -1) {
+		perror("client failed to send receive data from server");
+		exit(1);
+	}
+
+	return recvResult;
+}
+
+// returns true if command is valid
+bool isValidCommand(string command) {
+	unordered_set<string> validCommands = {"REQ", "UPL", "DEL", "LIS", "MKD", "RMD", "CHD", "XIT"};
+
+	return validCommands.find(command) != validCommands.end();
 }
