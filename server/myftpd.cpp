@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in server_addr;
 	char buf[4096];
 	socklen_t len;
-	int socketfd, s, new_s;
+	int socketfd, bytesReceived, new_s;
 
 	// check for proper function invocation
 	if (argc != 2) {
@@ -67,29 +67,32 @@ int main(int argc, char* argv[]) {
 
 	// loop continuously
 	while(1) {
+		
 		// wait for client connection
 		if ((new_s = accept(socketfd, (struct sockaddr *) &server_addr, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
+		} else {
+			cout << "new connection established" << endl;
 		}
 
 		// receive client message
 		while(1) {
-			if ((s = recv(new_s, buf, sizeof(buf), 0)) < -1) {
+			bytesReceived = recv(new_s, buf, sizeof(buf), 0);
+			if (bytesReceived < 0) {
 				cout << "error: unable to receive client's message" << endl;
 				exit(1);
-			} else if (s == 0) {
-				break;
-			}
+			} else if (bytesReceived > 0) {
+				cout << "TCP server received: " << buf << endl;
 
-			cout << "TCP server received: " << buf << endl;
-
-			bzero(buf, sizeof(buf));
-
-			// TODO: add processing for client command
+				// process client command
+				string command = buf;
+				bzero(buf, sizeof(buf));
+				if (command == "XIT") {
+					close(new_s);
+					break;
+				}
+			}	
 		}
 	}
-
-	close(new_s);
-
 }
