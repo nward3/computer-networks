@@ -20,9 +20,14 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
+#include <unordered_set>
 using namespace std;
 
 #define MAX_MESSAGE_LENGTH 5000
+
+void sendMessage(int socketDescriptor, string message);
+string getCommand(string input);
+bool isValidCommand(string command);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -33,8 +38,7 @@ int main(int argc, char* argv[]) {
 	stringstream ss;
 
 	if (argc != 3) {
-		cout << "Please provide the following command line arguments" << endl;
-		cout << "\t ./myftp <host name> <port number>" << endl;
+		cout << "usage: ./myftp <host name> <port number>" << endl;
 
 		exit(1);
 	}
@@ -77,18 +81,47 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
-
-	// main loop goes here
-	string command;
+	// main loop that interprets commands
+	string input, command;
 	while(1) {
-		cin >> command;
+		getline(cin, input);
+		command = getCommand(input);
 
-		int sendResult = send(s, command.c_str(), command.length(), 0);
-		if (sendResult == -1) {
-			perror("client failed to send to server");
-			exit(1);
+		if (command == "XIT") {
+			sendMessage(s, command);
+			close(s);
+			exit(0);
 		}
 	}
 
 	return 0;
+}
+
+// sends message to server. Includes error checking
+void sendMessage(int socketDescriptor, string message) {
+	int sendResult = send(socketDescriptor, message.c_str(), message.length(), 0);
+	if (sendResult == -1) {
+		perror("client failed to send to server");
+		exit(1);
+	}
+}
+
+// parses input from command line and returns the command
+string getCommand(string input) {
+	if (input.length() == 0) {
+		return input;
+	}
+
+	istringstream iss(input);
+	string command;
+	iss >> command;
+
+	return command;
+}
+
+// returns true if command is valid
+bool isValidCommand(string command) {
+	unordered_set<string> validCommands = {"REQ", "UPL", "DEL", "LIS", "MKD", "RMD", "CHD", "XIT"};
+
+	return validCommands.find(command) != validCommands.end();
 }
