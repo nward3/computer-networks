@@ -1,1 +1,5 @@
 *.swp
+
+# ignore executables
+myftp
+myftpd
