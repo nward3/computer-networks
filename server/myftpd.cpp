@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
 	// check for proper function invocation
 	if (argc != 2) {
-		cout << "error: improper function invocation" << endl;
+		cout << "usage: myftpd <port>" << endl;
 		exit(1);
 	}
 
