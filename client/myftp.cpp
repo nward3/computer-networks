@@ -1,9 +1,9 @@
 /*
- * Luke Garrison
- * netid: lgarriso
- * myftp.cpp
+ * Luke Garrison, Nick ward
+ * netid: lgarriso, nward3
  *
- * This program is the client for an FTP application. It will connect to specified server and enables different FTP commands.
+ * This program is the client for an FTP application. It will
+ * connect to specified server and enables different FTP commands.
  *
  */
 
@@ -29,6 +29,7 @@ using namespace std;
 int sendMessage(int socketDescriptor, string message);
 int recvMessage(int socketDescriptor, char* buf, int buf_size);
 string getCommand(string input);
+string getDirCommand(string input);
 bool isValidCommand(string command);
 
 int main(int argc, char* argv[]) {
@@ -101,6 +102,28 @@ int main(int argc, char* argv[]) {
 			recvMessage(s, buf, sizeof(buf));
 			cout << endl;
 			cout << buf << endl;
+		} else if (command == "MKD") {
+			sendMessage(s, command);
+
+			// build message to send to server
+			getline(cin, input);
+			command = getDirCommand(input);
+			command += " ";
+			getline(cin, input);
+			command += getDirCommand(input);
+
+			sendMessage(s, command);
+			recvMessage(s, buf, sizeof(buf));
+
+			string result = buf;
+			
+			if (result == "-2") {
+				cout << "The directory already exists on server" << endl;
+			} else if (result == "-1") {
+				cout << "Error in making directory" << endl;
+			} else {
+				cout << "The directory was successfully made" << endl;
+			}
 		} else {
 			sendMessage(s, command);
 			recvMessage(s, buf, sizeof(buf));
@@ -147,6 +170,23 @@ string getCommand(string input) {
 	istringstream iss(input);
 	string command;
 	iss >> command;
+
+	return command;
+}
+
+// parses input for directory command from command line and returns the command
+string getDirCommand(string input) {
+	if (input.length() == 0) {
+		return input;
+	}
+
+	istringstream iss(input);
+	string dirSize;
+	string dirName;
+	string command;
+	iss >> dirSize >> dirName;
+
+	command = dirSize + " " + dirName;
 
 	return command;
 }
