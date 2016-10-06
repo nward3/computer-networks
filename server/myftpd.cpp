@@ -17,7 +17,7 @@
 #include <sstream>
 using namespace std;
 
-int getDirectoryNameAndLength(string &directoryname, string &errorMessage, int socketDescriptor, char* buf, int bufsize);
+int getDirectoryNameAndLength(string &directoryname, int socketDescriptor, char* buf, int bufsize);
 void clearBuffer(char* buf, int bufsize);
 int sendMessage(int socketDescriptor, string message);
 int recvMessage(int socketDescriptor, char* buf, int bufsize);
@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
 		// receive and process client message
 		while(1) {
 			// initialize frequently used variables
-			string directoryName, errorMessage;
+			string directoryName;
 
 			bytesReceived = recvMessage(socketDescriptor, buf, bufsize);
 
@@ -119,31 +119,19 @@ int main(int argc, char* argv[]) {
 					string dirlisting = getDirectoryListing(socketDescriptor);
 					sendMessage(socketDescriptor, dirlisting);
 				} else if (command == "RMD") {
-					int getDirNameResult = getDirectoryNameAndLength(directoryName, errorMessage, socketDescriptor, buf, bufsize);
-					if (getDirNameResult == 0) {
+					if (getDirectoryNameAndLength(directoryName, socketDescriptor, buf, bufsize) >= 0) {
 						removeDirectory(directoryName, socketDescriptor, buf, bufsize);
-					} else {
-						sendMessage(socketDescriptor, errorMessage);
 					}
 				} else if (command == "MKD") {
-					int getDirNameResult = getDirectoryNameAndLength(directoryName, errorMessage, socketDescriptor, buf, bufsize);
+					if (getDirectoryNameAndLength(directoryName, socketDescriptor, buf, bufsize) >= 0) {
 
-					int status = createDirectory(directoryName);
-					if (getDirNameResult == 0) {
-						// convert result status code to a string
+						int status = createDirectory(directoryName);
 						sendMessage(socketDescriptor, intToString(status));
-					} else {
-						sendMessage(socketDescriptor, errorMessage);
 					}
 				} else if (command == "CHD") {
-					int getDirNameResult = getDirectoryNameAndLength(directoryName, errorMessage, socketDescriptor, buf, bufsize);
-
-					int status = changeDirectory(directoryName);
-					if (getDirNameResult == 0) {
-						// convert result status code to a string
+					if (getDirectoryNameAndLength(directoryName, socketDescriptor, buf, bufsize) >= 0) {
+						int status = changeDirectory(directoryName);
 						sendMessage(socketDescriptor, intToString(status));
-					} else {
-						sendMessage(socketDescriptor, errorMessage);
 					}
 				} else {
 					sendMessage(socketDescriptor, "Invalid FTP command");
@@ -187,9 +175,9 @@ string intToString(int i) {
 /* Awaits directory name and length from client (concatenated in a single request)
  * Sets the directoryName or errorMessage string because they are passed by reference
  * returns 0 if there is no problem
- * returns -1 if there was an error
+ * returns -1 and sends error message to the client if there was an error
  */
-int getDirectoryNameAndLength(string &directoryName, string &errorMessage, int socketDescriptor, char* buf, int bufsize) {
+int getDirectoryNameAndLength(string &directoryName, int socketDescriptor, char* buf, int bufsize) {
 	recvMessage(socketDescriptor, buf, bufsize);
 	string directoryData = buf;
 
@@ -198,14 +186,14 @@ int getDirectoryNameAndLength(string &directoryName, string &errorMessage, int s
 	stringstream ss(directoryData);
 	ss >> dirlen;
 	if (ss.fail()) {
-		errorMessage = "Directory length was not sent to server";
+		sendMessage(socketDescriptor, "Directory length was not sent to server");
 		return -1;
 	}
 
 	ss >> directoryName;
 
 	if (dirlen != directoryName.length()) {
-		errorMessage = "Directory name was corrupted when sent to the server";
+		sendMessage(socketDescriptor, "Directory name was corrupted when sent to the server");
 		return -1;
 	}
 
