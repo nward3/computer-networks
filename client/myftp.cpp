@@ -27,10 +27,12 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessage(int socketDescriptor, string message);
-int recvMessage(int socketDescriptor, char* buf, int buf_size);
+int recvMessage(int socketDescriptor, char* buf, int bufsize);
 string getCommand(string input);
 string getDirCommand(string input);
 bool isValidCommand(string command);
+void clearBuffer(char* buf, int bufSize);
+void makeDirectory(int socketDescriptor, char* buf, int bufsize);
 
 int main(int argc, char* argv[]) {
 
@@ -72,71 +74,79 @@ int main(int argc, char* argv[]) {
 	sin.sin_port=htons(port);
 
 	// create the socket
-	int s;
-	if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+	int socketDescriptor;
+	if ((socketDescriptor = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		cout << "socket creation unsuccessful" << endl;
 		exit(1);
 	}
 
 	// connect to server
-	if (connect(s, (struct sockaddr	*)&sin, sizeof(sin)) < 0) {
+	if (connect(socketDescriptor, (struct sockaddr	*)&sin, sizeof(sin)) < 0) {
 		perror("Connection to server failed");
-		close(s);
+		close(socketDescriptor);
 		exit(1);
 	}
 
 	char buf[MAX_MESSAGE_LENGTH];
+	int bufsize = sizeof(buf);
 
 	// main loop that interprets commands
-	string input, command;
+	string input, command, directoryName;
 	while(1) {
-		getline(cin, input);
-		command = getCommand(input);
+		cin >> command;
 
 		if (command == "XIT") {
-			sendMessage(s, command);
-			close(s);
+			sendMessage(socketDescriptor, command);
+			close(socketDescriptor);
 			exit(0);
 		} else if (command == "LIS") {
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
+			sendMessage(socketDescriptor, command);
+			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
 		} else if (command == "MKD") {
-			sendMessage(s, command);
+			sendMessage(socketDescriptor, command);
+			makeDirectory(socketDescriptor, buf, bufsize);
 
-			// build message to send to server
-			getline(cin, input);
-			command = getDirCommand(input);
-			command += " ";
-			getline(cin, input);
-			command += getDirCommand(input);
-
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
-
-			string result = buf;
-			
-			if (result == "-2") {
-				cout << "The directory already exists on server" << endl;
-			} else if (result == "-1") {
-				cout << "Error in making directory" << endl;
-			} else {
-				cout << "The directory was successfully made" << endl;
-			}
 		} else {
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
+			sendMessage(socketDescriptor, command);
+			recvMessage(socketDescriptor, buf, bufsize);
 			cout << buf << endl;
 		}
-
-		// clear the recv buffer
-		bzero(buf, sizeof(buf));
 
 		cout << endl;
 	}
 
+	free(buf);
 	return 0;
+}
+
+// request for the server to create a new directory
+void makeDirectory(int socketDescriptor, char* buf, int bufsize) {
+	string directoryName;
+	cin >> directoryName;
+
+	stringstream ss;
+	ss << directoryName.length() << " " << directoryName;
+	string msg = ss.str();
+
+	sendMessage(socketDescriptor, msg);
+	recvMessage(socketDescriptor, buf, bufsize);
+
+	string statusCode = buf;
+
+	if (statusCode == "-2") {
+		cout << "The directory already exists on server" << endl;
+	} else if (statusCode == "-1") {
+		cout << "Error in making directory" << endl;
+	} else {
+		cout << "The directory was successfully made" << endl;
+	}
+}
+
+// clear the buffer
+void clearBuffer(char* buf, int bufsize) {
+	bzero(buf, bufsize);
 }
 
 // sends message to server. Includes error checking
@@ -151,8 +161,10 @@ int sendMessage(int socketDescriptor, string message) {
 }
 
 // sends message to server. Includes error checking
-int recvMessage(int socketDescriptor, char* buf, int buf_size) {
-	int recvResult = recv(socketDescriptor, buf, buf_size, 0);
+int recvMessage(int socketDescriptor, char* buf, int bufsize) {
+	clearBuffer(buf, bufsize);
+
+	int recvResult = recv(socketDescriptor, buf, bufsize, 0);
 	if (recvResult == -1) {
 		perror("client failed to send receive data from server");
 		exit(1);

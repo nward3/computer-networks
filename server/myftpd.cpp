@@ -17,18 +17,22 @@
 #include <sstream>
 using namespace std;
 
+int getDirectoryNameAndLength(string &directoryname, string &errorMessage, int socketDescriptor, char* buf, int bufsize);
+void clearBuffer(char* buf, int bufsize);
 int sendMessage(int socketDescriptor, string message);
-int recvMessage(int socketDescriptor, char* buf, int buf_size);
+int recvMessage(int socketDescriptor, char* buf, int bufsize);
 bool isValidCommand(string command);
 bool directoryExists(string directoryName);
 string getDirectoryListing(int socketDescriptor);
-string createDirectory(string dirInfo);
+int createDirectory(string directoryName);
+string intToString(int i);
 
 int main(int argc, char* argv[]) {
 
 	// define data structures to be used
 	struct sockaddr_in server_addr;
 	char buf[4096];
+	int bufsize = sizeof(buf);
 	socklen_t len;
 	int socketfd, bytesReceived, socketDescriptor;
 
@@ -90,7 +94,10 @@ int main(int argc, char* argv[]) {
 
 		// receive and process client message
 		while(1) {
-			bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+			// initialize frequently used variables
+			string directoryName, errorMessage;
+
+			bytesReceived = recvMessage(socketDescriptor, buf, bufsize);
 
 			if (bytesReceived < 0) {
 				cout << "error: unable to receive client's message" << endl;
@@ -101,8 +108,7 @@ int main(int argc, char* argv[]) {
 				// process client command
 				string command = buf;
 
-				// clear the recv buffer
-				bzero(buf, sizeof(buf));
+				clearBuffer(buf, bufsize);
 
 				if (command == "XIT") {
 					close(socketDescriptor);
@@ -111,63 +117,95 @@ int main(int argc, char* argv[]) {
 					string dirlisting = getDirectoryListing(socketDescriptor);
 					sendMessage(socketDescriptor, dirlisting);
 				} else if (command == "MKD") {
-					bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
-					string bufcommand = buf;
-					if (bytesReceived < 0) {
-						cout << "error: unable to receive client's message" << endl;
-						exit(1);
-					} else if (bytesReceived > 0) {
-						string dirInfo = buf;
-						bzero(buf, sizeof(buf));
-						string result = createDirectory(dirInfo);
-						sendMessage(socketDescriptor, result);
+					int getDirNameResult = getDirectoryNameAndLength(directoryName, errorMessage, socketDescriptor, buf, bufsize);
+
+					int status = createDirectory(directoryName);
+					if (getDirNameResult == 0) {
+						// convert result status code to a string
+						sendMessage(socketDescriptor, intToString(status));
+					} else {
+						sendMessage(socketDescriptor, errorMessage);
 					}
-					
 				} else {
 					sendMessage(socketDescriptor, "Invalid FTP command");
 				}
 			}	
 		}
 	}
+
+	free(buf);
+}
+
+// helper function to convert an integer to string
+string intToString(int i) {
+	stringstream ss;
+	ss << i;
+
+	return ss.str();
+}
+
+/* Awaits directory name and length from client (concatenated in a single request)
+ * Sets the directoryName or errorMessage string because they are passed by reference
+ * returns 0 if there is no problem
+ * returns -1 if there was an error
+ */
+int getDirectoryNameAndLength(string &directoryName, string &errorMessage, int socketDescriptor, char* buf, int bufsize) {
+	recvMessage(socketDescriptor, buf, bufsize);
+	string directoryData = buf;
+
+	// parse dirlen and dirname from directoryData string
+	unsigned dirlen;
+	stringstream ss(directoryData);
+	ss >> dirlen;
+	if (ss.fail()) {
+		errorMessage = "Directory length was not sent to server";
+		return -1;
+	}
+
+	ss >> directoryName;
+
+	if (dirlen != directoryName.length()) {
+		errorMessage = "Directory name was corrupted when sent to the server";
+		return -1;
+	}
+
+	return 0;
+}
+
+// clear the recv buffer
+void clearBuffer(char* buf, int bufsize) {
+	bzero(buf, bufsize);
 }
 
 // create directory if it does not exist
-string createDirectory(string input) {
-	istringstream iss(input);
-	int dirNameLength;
-	string dirName;
-
-	iss >> dirNameLength >> dirName;
-
-	if (directoryExists(dirName)) {
-		return "-2";
+int createDirectory(string directoryName) {
+	if (directoryExists(directoryName)) {
+		return -2;
 	} else {
 		// try to create directory
-		if (mkdir(dirName.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) < 0) {
-			return "-1";
+		if (mkdir(directoryName.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) < 0) {
+			return -1;
 		} else {
-			return "1";
+			return 1;
 		}
 	}
-
-	return "";
 }
 
 // check if directory already exists
-bool directoryExists (string pzPath) {
-
-	if (pzPath.length() == 0) return false;
+bool directoryExists (string path) {
+	if (path.length() == 0) return false;
 
 	DIR *pDir;
-	bool bExists = false;
+	bool dirExists = false;
 
-	pDir = opendir(pzPath.c_str());
+	pDir = opendir(path.c_str());
 
 	if (pDir != NULL) {
-		bExists = true;    
+		dirExists = true;
 		closedir(pDir);								
 	}
-	return bExists;
+
+	return dirExists;
 }
 
 /* returns a string containing the files and directories in the current
@@ -203,8 +241,11 @@ int sendMessage(int socketDescriptor, string message) {
 }
 
 // sends message to server. Includes error checking
-int recvMessage(int socketDescriptor, char* buf, int buf_size) {
-	int recvResult = recv(socketDescriptor, buf, buf_size, 0);
+int recvMessage(int socketDescriptor, char* buf, int bufsize) {
+	// clear buffer before receiving message
+	clearBuffer(buf, bufsize);
+
+	int recvResult = recv(socketDescriptor, buf, bufsize, 0);
 	if (recvResult == -1) {
 		perror("client failed to send receive data from server");
 		exit(1);
