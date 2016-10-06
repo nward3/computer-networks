@@ -33,6 +33,7 @@ string getDirCommand(string input);
 bool isValidCommand(string command);
 void clearBuffer(char* buf, int bufSize);
 void makeDirectory(int socketDescriptor, char* buf, int bufsize);
+void changeDirectory(int socketDescriptor, char* buf, int bufsize);
 
 int main(int argc, char* argv[]) {
 
@@ -95,21 +96,20 @@ int main(int argc, char* argv[]) {
 	while(1) {
 		cin >> command;
 
+		sendMessage(socketDescriptor, command);
+
 		if (command == "XIT") {
-			sendMessage(socketDescriptor, command);
 			close(socketDescriptor);
 			exit(0);
 		} else if (command == "LIS") {
-			sendMessage(socketDescriptor, command);
 			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
 		} else if (command == "MKD") {
-			sendMessage(socketDescriptor, command);
 			makeDirectory(socketDescriptor, buf, bufsize);
-
+		} else if (command == "CHD") {
+			changeDirectory(socketDescriptor, buf, bufsize);
 		} else {
-			sendMessage(socketDescriptor, command);
 			recvMessage(socketDescriptor, buf, bufsize);
 			cout << buf << endl;
 		}
@@ -119,6 +119,29 @@ int main(int argc, char* argv[]) {
 
 	free(buf);
 	return 0;
+}
+
+// request for the server to change directories
+void changeDirectory(int socketDescriptor, char* buf, int bufsize) {
+	string directoryName;
+	cin >> directoryName;
+
+	stringstream ss;
+	ss << directoryName.length() << " " << directoryName;
+	string msg = ss.str();
+
+	sendMessage(socketDescriptor, msg);
+	recvMessage(socketDescriptor, buf, bufsize);
+
+	string statusCode = buf;
+
+	if (statusCode == "-2") {
+		cout << "The specified directory does not exist" << endl;
+	} else if (statusCode == "-1") {
+		cout << "Unable to change directories" << endl;
+	} else {
+		cout << "The directory was successfully changed" << endl;
+	}
 }
 
 // request for the server to create a new directory

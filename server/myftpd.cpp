@@ -25,6 +25,7 @@ bool isValidCommand(string command);
 bool directoryExists(string directoryName);
 string getDirectoryListing(int socketDescriptor);
 int createDirectory(string directoryName);
+int changeDirectory(string directoryName);
 string intToString(int i);
 
 int main(int argc, char* argv[]) {
@@ -126,6 +127,16 @@ int main(int argc, char* argv[]) {
 					} else {
 						sendMessage(socketDescriptor, errorMessage);
 					}
+				} else if (command == "CHD") {
+					int getDirNameResult = getDirectoryNameAndLength(directoryName, errorMessage, socketDescriptor, buf, bufsize);
+
+					int status = changeDirectory(directoryName);
+					if (getDirNameResult == 0) {
+						// convert result status code to a string
+						sendMessage(socketDescriptor, intToString(status));
+					} else {
+						sendMessage(socketDescriptor, errorMessage);
+					}
 				} else {
 					sendMessage(socketDescriptor, "Invalid FTP command");
 				}
@@ -175,6 +186,20 @@ int getDirectoryNameAndLength(string &directoryName, string &errorMessage, int s
 // clear the recv buffer
 void clearBuffer(char* buf, int bufsize) {
 	bzero(buf, bufsize);
+}
+
+// create directory if it does not exist
+int changeDirectory(string directoryName) {
+	if (directoryExists(directoryName)) {
+		// try to create directory
+		if (chdir(directoryName.c_str()) < 0) {
+			return -1;
+		} else {
+			return 1;
+		}
+	} else {
+		return -2;
+	}
 }
 
 // create directory if it does not exist
