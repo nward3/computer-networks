@@ -27,10 +27,16 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessage(int socketDescriptor, string message);
-int recvMessage(int socketDescriptor, char* buf, int buf_size);
+int recvMessage(int socketDescriptor, char* buf, int bufsize);
 string getCommand(string input);
 string getDirCommand(string input);
 bool isValidCommand(string command);
+void clearBuffer(char* buf, int bufSize);
+string getDirectoryNameAndLength();
+void makeDirectory(int socketDescriptor, char* buf, int bufsize);
+void changeDirectory(int socketDescriptor, char* buf, int bufsize);
+void removeDirectory(int socketDescriptor, char* buf, int bufsize);
+int stringToInt(string s);
 
 int main(int argc, char* argv[]) {
 
@@ -72,102 +78,156 @@ int main(int argc, char* argv[]) {
 	sin.sin_port=htons(port);
 
 	// create the socket
-	int s;
-	if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+	int socketDescriptor;
+	if ((socketDescriptor = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		cout << "socket creation unsuccessful" << endl;
 		exit(1);
 	}
 
 	// connect to server
-	if (connect(s, (struct sockaddr	*)&sin, sizeof(sin)) < 0) {
+	if (connect(socketDescriptor, (struct sockaddr	*)&sin, sizeof(sin)) < 0) {
 		perror("Connection to server failed");
-		close(s);
+		close(socketDescriptor);
 		exit(1);
 	}
 
 	char buf[MAX_MESSAGE_LENGTH];
+	int bufsize = sizeof(buf);
 
 	// main loop that interprets commands
-	string input, command;
+	string input, command, directoryName;
 	while(1) {
-		getline(cin, input);
-		command = getCommand(input);
+		cin >> command;
+
+		sendMessage(socketDescriptor, command);
 
 		if (command == "XIT") {
-			sendMessage(s, command);
-			close(s);
+			close(socketDescriptor);
 			exit(0);
 		} else if (command == "LIS") {
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
+			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
 		} else if (command == "MKD") {
-			sendMessage(s, command);
-
-			// build message to send to server
-			getline(cin, input);
-			command = getDirCommand(input);
-			command += " ";
-			getline(cin, input);
-			command += getDirCommand(input);
-
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
-
-			string result = buf;
-			
-			if (result == "-2") {
-				cout << "The directory already exists on server" << endl;
-			} else if (result == "-1") {
-				cout << "Error in making directory" << endl;
-			} else {
-				cout << "The directory was successfully made" << endl;
-			}
+			makeDirectory(socketDescriptor, buf, bufsize);
 		} else if (command == "RMD") {
-			sendMessage(s, command);
-
-			// send the directory name length
-			cin >> input;
-			sendMessage(s, input);
-
-			// send the directory name
-			cin >> input;
-			cout << sendMessage(s, input) << endl;
-			
-			// potential confirmation
-			recvMessage(s, buf, sizeof(buf));
-			string result = buf;
-			bzero(buf, sizeof(buf));
-			if (result == "-1") {
-				cout << "The directory does not exist on server" << endl;
-			} else if (result == "1") {
-				cout << "Confirm deletion: Yes/No" << endl;
-				getline(cin, input);
-				command = getDirCommand(input);
-				sendMessage(s, command);
-				recvMessage(s, buf, sizeof(buf));
-				result = buf;
-				if (result == "0") {
-					cout << "Directory deleted" << endl;
-				} else {
-					cout << "Failed to delete directory" << endl;
-				}
-			}
-
+			removeDirectory(socketDescriptor, buf, bufsize);
+		} else if (command == "CHD") {
+			changeDirectory(socketDescriptor, buf, bufsize);
 		} else {
-			sendMessage(s, command);
-			recvMessage(s, buf, sizeof(buf));
+			recvMessage(socketDescriptor, buf, bufsize);
 			cout << buf << endl;
 		}
-
-		// clear the recv buffer
-		bzero(buf, sizeof(buf));
 
 		cout << endl;
 	}
 
+	free(buf);
 	return 0;
+}
+
+void removeDirectory(int socketDescriptor, char* buf, int bufsize) {
+	// send the directory name and length to server
+	string msg = getDirectoryNameAndLength();
+	sendMessage(socketDescriptor, msg);
+	
+	// server responds if directory exists or not
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+	int result = stringToInt(buf);
+	if (result < 0) {
+		cout << "The directory does not exist on server" << endl;
+	} else {
+		// directory exists -- confirmation
+	
+		string confirmation;
+		while (confirmation != "Yes" && confirmation != "No") {
+			cout << "Confirm deletion: Yes/No" << endl;
+			cin >> confirmation;
+		}
+
+		sendMessage(socketDescriptor, confirmation);
+		if (confirmation == "No") {
+			cout << "Delete abandoned by the user!" << endl;
+			return;
+		}
+
+		recvMessage(socketDescriptor, buf, sizeof(buf));
+		result = stringToInt(buf);
+		if (result > 0) {
+			cout << "Directory deleted" << endl;
+		} else {
+			cout << "Failed to delete directory" << endl;
+		}
+	}
+}
+
+/* prompts the user for a directory name and returns the concatenation of 
+ * the length of the directory name string and the directory name string
+ */
+string getDirectoryNameAndLength() {
+	string directoryName;
+	cin >> directoryName;
+
+	stringstream ss;
+	ss << directoryName.length() << " " << directoryName;
+	return ss.str();
+}
+
+// convert string to integer
+int stringToInt(string s) {
+	stringstream ss;
+	ss << s;
+
+	int i;
+	ss >> i;
+
+	return i;
+}
+
+// request for the server to change directories
+void changeDirectory(int socketDescriptor, char* buf, int bufsize) {
+	string msg = getDirectoryNameAndLength();
+
+	sendMessage(socketDescriptor, msg);
+	recvMessage(socketDescriptor, buf, bufsize);
+
+	string statusCode = buf;
+
+	if (statusCode == "-2") {
+		cout << "The specified directory does not exist" << endl;
+	} else if (statusCode == "-1") {
+		cout << "Unable to change directories" << endl;
+	} else {
+		cout << "The directory was successfully changed" << endl;
+	}
+}
+
+// request for the server to create a new directory
+void makeDirectory(int socketDescriptor, char* buf, int bufsize) {
+	string directoryName;
+	cin >> directoryName;
+
+	stringstream ss;
+	ss << directoryName.length() << " " << directoryName;
+	string msg = ss.str();
+
+	sendMessage(socketDescriptor, msg);
+	recvMessage(socketDescriptor, buf, bufsize);
+
+	string statusCode = buf;
+
+	if (statusCode == "-2") {
+		cout << "The directory already exists on server" << endl;
+	} else if (statusCode == "-1") {
+		cout << "Error in making directory" << endl;
+	} else {
+		cout << "The directory was successfully made" << endl;
+	}
+}
+
+// clear the buffer
+void clearBuffer(char* buf, int bufsize) {
+	bzero(buf, bufsize);
 }
 
 // sends message to server. Includes error checking
@@ -182,8 +242,10 @@ int sendMessage(int socketDescriptor, string message) {
 }
 
 // sends message to server. Includes error checking
-int recvMessage(int socketDescriptor, char* buf, int buf_size) {
-	int recvResult = recv(socketDescriptor, buf, buf_size, 0);
+int recvMessage(int socketDescriptor, char* buf, int bufsize) {
+	clearBuffer(buf, bufsize);
+
+	int recvResult = recv(socketDescriptor, buf, bufsize, 0);
 	if (recvResult == -1) {
 		perror("client failed to send receive data from server");
 		exit(1);
@@ -201,23 +263,6 @@ string getCommand(string input) {
 	istringstream iss(input);
 	string command;
 	iss >> command;
-
-	return command;
-}
-
-// parses input for directory command from command line and returns the command
-string getDirCommand(string input) {
-	if (input.length() == 0) {
-		return input;
-	}
-
-	istringstream iss(input);
-	string dirSize;
-	string dirName;
-	string command;
-	iss >> dirSize >> dirName;
-
-	command = dirSize + " " + dirName;
 
 	return command;
 }
