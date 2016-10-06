@@ -128,8 +128,8 @@ int main(int argc, char* argv[]) {
 
 void removeDirectory(int socketDescriptor, char* buf, int bufsize) {
 	// send the directory name and length to server
-	string msg = getDirectoryNameAndLength();
-	sendMessage(socketDescriptor, msg);
+	string directoryNameAndLength = getDirectoryNameAndLength();
+	sendMessage(socketDescriptor, directoryNameAndLength);
 	
 	// server responds if directory exists or not
 	recvMessage(socketDescriptor, buf, sizeof(buf));
@@ -186,9 +186,9 @@ int stringToInt(string s) {
 
 // request for the server to change directories
 void changeDirectory(int socketDescriptor, char* buf, int bufsize) {
-	string msg = getDirectoryNameAndLength();
+	string directoryNameAndLength = getDirectoryNameAndLength();
 
-	sendMessage(socketDescriptor, msg);
+	sendMessage(socketDescriptor, directoryNameAndLength);
 	recvMessage(socketDescriptor, buf, bufsize);
 
 	string statusCode = buf;
@@ -204,14 +204,9 @@ void changeDirectory(int socketDescriptor, char* buf, int bufsize) {
 
 // request for the server to create a new directory
 void makeDirectory(int socketDescriptor, char* buf, int bufsize) {
-	string directoryName;
-	cin >> directoryName;
+	string directoryNameAndLength = getDirectoryNameAndLength();
 
-	stringstream ss;
-	ss << directoryName.length() << " " << directoryName;
-	string msg = ss.str();
-
-	sendMessage(socketDescriptor, msg);
+	sendMessage(socketDescriptor, directoryNameAndLength);
 	recvMessage(socketDescriptor, buf, bufsize);
 
 	string statusCode = buf;
