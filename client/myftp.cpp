@@ -33,6 +33,7 @@ string getDirCommand(string input);
 bool isValidCommand(string command);
 void clearBuffer(char* buf, int bufSize);
 string getDirectoryNameAndLength();
+void deleteFile(int socketDescriptor, char* buf, int bufsize);
 void makeDirectory(int socketDescriptor, char* buf, int bufsize);
 void changeDirectory(int socketDescriptor, char* buf, int bufsize);
 void removeDirectory(int socketDescriptor, char* buf, int bufsize);
@@ -108,6 +109,8 @@ int main(int argc, char* argv[]) {
 			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
+		} else if (command == "DEL") {
+			deleteFile(socketDescriptor, buf, bufsize);
 		} else if (command == "MKD") {
 			makeDirectory(socketDescriptor, buf, bufsize);
 		} else if (command == "RMD") {
@@ -124,6 +127,41 @@ int main(int argc, char* argv[]) {
 
 	free(buf);
 	return 0;
+}
+
+void deleteFile(int socketDescriptor, char* buf, int bufsize) {
+	// send the file name and length to server
+	string fileNameAndLength = getDirectoryNameAndLength();
+	sendMessage(socketDescriptor, fileNameAndLength);
+
+	// server responds if file exists or not
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+	int result = stringToInt(buf);
+	if (result < 0) {
+		cout << "The file does not exist on server" << endl;
+	} else {
+		// file exists -- confirmation
+		
+		string confirmation;
+		while (confirmation != "Yes" && confirmation != "No") {
+			cout << "confirm deletion: Yes/No" << endl;
+			cin >> confirmation;
+		}
+
+		sendMessage(socketDescriptor, confirmation);
+		if (confirmation == "No") {
+			cout << "Delete abandoned by the user!" << endl;
+			return;
+		}
+
+		recvMessage(socketDescriptor, buf, sizeof(buf));
+		result = stringToInt(buf);
+		if (result > 0) {
+			cout <<"File deleted" << endl;
+		} else {
+			cout << "Failed to delete directory" << endl;
+		}
+	}
 }
 
 void removeDirectory(int socketDescriptor, char* buf, int bufsize) {

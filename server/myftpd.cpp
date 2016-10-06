@@ -23,10 +23,12 @@ int sendMessage(int socketDescriptor, string message);
 int recvMessage(int socketDescriptor, char* buf, int bufsize);
 bool isValidCommand(string command);
 bool directoryExists(string directoryName);
+bool fileExists(string fileName);
 string getDirectoryListing(int socketDescriptor);
 int createDirectory(string directoryName);
 int changeDirectory(string directoryName);
 void removeDirectory(string directoryName, int socketDescriptor, char* buf, int bufsize);
+void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize);
 string intToString(int i);
 
 int main(int argc, char* argv[]) {
@@ -98,6 +100,7 @@ int main(int argc, char* argv[]) {
 		while(1) {
 			// initialize frequently used variables
 			string directoryName;
+			string fileName;
 
 			bytesReceived = recvMessage(socketDescriptor, buf, bufsize);
 
@@ -115,6 +118,10 @@ int main(int argc, char* argv[]) {
 				if (command == "XIT") {
 					close(socketDescriptor);
 					break;
+				} else if (command == "DEL") {
+					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
+						deleteFile(fileName, socketDescriptor, buf, bufsize);
+					}
 				} else if (command == "LIS") {
 					string dirlisting = getDirectoryListing(socketDescriptor);
 					sendMessage(socketDescriptor, dirlisting);
@@ -124,7 +131,6 @@ int main(int argc, char* argv[]) {
 					}
 				} else if (command == "MKD") {
 					if (getDirectoryNameAndLength(directoryName, socketDescriptor, buf, bufsize) >= 0) {
-
 						int status = createDirectory(directoryName);
 						sendMessage(socketDescriptor, intToString(status));
 					}
@@ -141,6 +147,27 @@ int main(int argc, char* argv[]) {
 	}
 
 	free(buf);
+}
+
+// deletes file
+void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
+	bool result = fileExists(fileName);
+	if (result) {
+		sendMessage(socketDescriptor, "1");
+		recvMessage(socketDescriptor, buf, sizeof(buf));
+		string choice = buf;
+
+		if (choice == "Yes") {
+			int status = remove(fileName.c_str());
+			if (status == 0) {
+				sendMessage(socketDescriptor, "1");
+			} else {
+				sendMessage(socketDescriptor, "-1");
+			}
+		}
+	} else {
+		sendMessage(socketDescriptor, "-1");
+	}
 }
 
 // remove directory
@@ -247,10 +274,30 @@ bool directoryExists (string pathname) {
 		dirExists = true;
 		closedir(pDir);								
 	} else {
-		cout << "ERROR: " << strerror(errno) << endl;
+		cout << "error: " << strerror(errno) << endl;
 	}
 
 	return dirExists;
+}
+
+// check if file exists
+bool fileExists (string filename) {
+	
+	if (filename.length() == 0) return false;
+
+	FILE *pFile;
+	bool fileExists = false;
+
+	pFile = fopen(filename.c_str(), "r");
+
+	if (pFile != NULL) {
+		fileExists = true;
+		fclose(pFile);
+	} else {
+		cout << "error: " << strerror(errno) << endl;
+	}
+
+	return fileExists;
 }
 
 /* returns a string containing the files and directories in the current
