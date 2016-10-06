@@ -124,6 +124,37 @@ int main(int argc, char* argv[]) {
 			} else {
 				cout << "The directory was successfully made" << endl;
 			}
+		} else if (command == "RMD") {
+			sendMessage(s, command);
+
+			// send the directory name length
+			cin >> input;
+			sendMessage(s, input);
+
+			// send the directory name
+			cin >> input;
+			cout << sendMessage(s, input) << endl;
+			
+			// potential confirmation
+			recvMessage(s, buf, sizeof(buf));
+			string result = buf;
+			bzero(buf, sizeof(buf));
+			if (result == "-1") {
+				cout << "The directory does not exist on server" << endl;
+			} else if (result == "1") {
+				cout << "Confirm deletion: Yes/No" << endl;
+				getline(cin, input);
+				command = getDirCommand(input);
+				sendMessage(s, command);
+				recvMessage(s, buf, sizeof(buf));
+				result = buf;
+				if (result == "0") {
+					cout << "Directory deleted" << endl;
+				} else {
+					cout << "Failed to delete directory" << endl;
+				}
+			}
+
 		} else {
 			sendMessage(s, command);
 			recvMessage(s, buf, sizeof(buf));

@@ -112,7 +112,6 @@ int main(int argc, char* argv[]) {
 					sendMessage(socketDescriptor, dirlisting);
 				} else if (command == "MKD") {
 					bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
-					string bufcommand = buf;
 					if (bytesReceived < 0) {
 						cout << "error: unable to receive client's message" << endl;
 						exit(1);
@@ -123,6 +122,34 @@ int main(int argc, char* argv[]) {
 						sendMessage(socketDescriptor, result);
 					}
 					
+				} else if (command == "RMD") {
+					recvMessage(socketDescriptor, buf, sizeof(buf));
+					string dirSize = buf;
+					bzero(buf, sizeof(buf));
+					bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+					string dirName = buf;
+					bzero(buf, sizeof(buf));
+						
+					// check if directory exists
+					bool result = directoryExists(dirName);
+					cout << "directory: " << dirName << endl;
+					cout << "directory exists: " << result << endl;
+					if (result) {
+						sendMessage(socketDescriptor, "1");
+						bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+						string choice = buf;
+						bzero(buf, sizeof(buf));
+
+						if (choice == "Yes") {
+							int status = rmdir(dirName.c_str());
+							if (status == 0) {
+								sendMessage(socketDescriptor, "1");
+							}
+							sendMessage(socketDescriptor, "-1");
+						}	
+					} else {
+						sendMessage(socketDescriptor, "-1");
+					}
 				} else {
 					sendMessage(socketDescriptor, "Invalid FTP command");
 				}
@@ -154,20 +181,35 @@ string createDirectory(string input) {
 }
 
 // check if directory already exists
-bool directoryExists (string pzPath) {
+bool directoryExists (string pathname) {
 
-	if (pzPath.length() == 0) return false;
+	if (pathname.length() == 0) return false;
 
+	/*
+	struct stat sb;
+
+	if (stat(pathname.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode)) {
+		return true;
+	} else {
+		cout << "false" << endl;
+		return false;
+	}
+	*/
+	
 	DIR *pDir;
 	bool bExists = false;
 
-	pDir = opendir(pzPath.c_str());
+	cout << "pathname size: " << pathname.length() << endl;
+	pDir = opendir(pathname.c_str());
 
 	if (pDir != NULL) {
 		bExists = true;    
 		closedir(pDir);								
+	} else {
+		cout << "ERROR: " << strerror(errno) << endl;
 	}
 	return bExists;
+	
 }
 
 /* returns a string containing the files and directories in the current
@@ -198,7 +240,7 @@ int sendMessage(int socketDescriptor, string message) {
 		perror("client failed to send to server");
 		exit(1);
 	}
-
+	
 	return sendResult;
 }
 
