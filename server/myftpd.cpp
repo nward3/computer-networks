@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -15,7 +16,11 @@
 #include <errno.h>
 #include <unordered_set>
 #include <sstream>
+#include <mhash.h>
+#include <ctime>
 using namespace std;
+
+#define MAX_MESSAGE_LENGTH 4096
 
 int getDirectoryNameAndLength(string &directoryname, int socketDescriptor, char* buf, int bufsize);
 void clearBuffer(char* buf, int bufsize);
@@ -29,7 +34,12 @@ int createDirectory(string directoryName);
 int changeDirectory(string directoryName);
 void removeDirectory(string directoryName, int socketDescriptor, char* buf, int bufsize);
 void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize);
+void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize);
 string intToString(int i);
+string longToString(long i);
+int stringToInt(string bytes);
+double timeElapsed(struct timeval start, struct timeval end);
+double calculateThroughput(struct timeval start, struct timeval end, long bytesTranferred);
 
 int main(int argc, char* argv[]) {
 
@@ -118,6 +128,11 @@ int main(int argc, char* argv[]) {
 				if (command == "XIT") {
 					close(socketDescriptor);
 					break;
+				} else if (command == "UPL") {
+					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
+						sendMessage(socketDescriptor, "READY");
+						uploadFile(fileName, socketDescriptor, buf, bufsize);
+					}
 				} else if (command == "DEL") {
 					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
 						deleteFile(fileName, socketDescriptor, buf, bufsize);
@@ -147,6 +162,96 @@ int main(int argc, char* argv[]) {
 	}
 
 	free(buf);
+}
+
+// uploads file from the client to the server
+void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
+	// receive size (in bytes) of file
+	recvMessage(socketDescriptor, buf, bufsize);
+	int totalBytes = stringToInt(buf);
+	int bytesWritten = 0;
+
+	// open file for writing
+	FILE* fp;
+	fp = fopen(fileName.c_str(), "wb");
+	if (!fp) {
+		exit(1);
+	}
+
+	// time from start of transfer to completion
+	struct timeval start;
+	struct timeval end;
+	gettimeofday(&start, NULL);
+	// write to the open file
+	int bytesReceived;
+	while (bytesWritten < totalBytes) {
+		bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+		fwrite(buf, sizeof(char), bytesReceived, fp);
+		bytesWritten += bytesReceived;
+	}
+	fclose(fp);
+	gettimeofday(&end, NULL);
+
+	// compute MD5 hash for file transferred
+	struct stat filestatus;
+	stat(fileName.c_str(), &filestatus);
+
+	// tell client to send hash
+	sendMessage(socketDescriptor, "Ready for MD5 Hash");
+	
+	// receive hash from client
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+	string clientHash = buf;
+
+	MHASH td;
+	char filecontent[filestatus.st_size];
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
+	fclose(fPtr);
+
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+		exit(1);
+	}
+
+	mhash(td, &filecontent, 1);
+	ostringstream os;
+	os << mhash_end(td);
+	cout << os.str() << endl;
+
+	// check that client and server hash is same
+	if (os.str() == clientHash) {
+		// calculate throughput and send it to client
+		long throughput = calculateThroughput(start, end, filestatus.st_size);
+		string throughputMessage = longToString(filestatus.st_size) + " bytes transferred in ";
+		throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
+		throughputMessage += longToString(throughput) + " Megabytes/sec";
+		sendMessage(socketDescriptor, throughputMessage);
+	} else {
+		// clean up failed file transfer
+		bool result = fileExists(fileName);
+		if (result) {
+			remove(fileName.c_str());
+		}
+		sendMessage(socketDescriptor, "-1");
+	}
+}
+
+// calculate time (in usec) elapsed from start to end
+double timeElapsed(struct timeval start, struct timeval end) {
+	return (start.tv_sec * 1000000.0 + start.tv_usec) - (end.tv_sec * 1000000.0 + start.tv_usec);
+}
+
+// calculate throughput for file transfer
+double calculateThroughput(struct timeval start, struct timeval end, long bytesTransferred) {
+	
+	// calculate time elapsed from start to end
+	double time = timeElapsed(start, end);
+
+	// convert bytes to bits and calculate bits / usec
+	return bytesTransferred / time;
 }
 
 // deletes file
@@ -197,6 +302,25 @@ string intToString(int i) {
 	ss << i;
 
 	return ss.str();
+}
+
+// convert long to string
+string longToString(long i) {
+	stringstream ss;
+	ss << i;
+
+	return ss.str();
+}
+
+// convert string to integer
+int stringToInt(string s) {
+	stringstream ss;
+	ss << s;
+
+	int i;
+	ss >> i;
+
+	return i;
 }
 
 /* Awaits directory name and length from client (concatenated in a single request)
