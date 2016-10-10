@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,6 +23,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <unordered_set>
+#include <mhash.h>
 using namespace std;
 
 #define MAX_MESSAGE_LENGTH 4096
@@ -33,6 +35,7 @@ string getDirCommand(string input);
 bool isValidCommand(string command);
 void clearBuffer(char* buf, int bufSize);
 string getDirectoryNameAndLength();
+void uploadFile(int socketDescriptor, char* buf, int bufsize);
 void deleteFile(int socketDescriptor, char* buf, int bufsize);
 void makeDirectory(int socketDescriptor, char* buf, int bufsize);
 void changeDirectory(int socketDescriptor, char* buf, int bufsize);
@@ -109,6 +112,8 @@ int main(int argc, char* argv[]) {
 			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
+		} else if (command == "UPL") {
+			uploadFile(socketDescriptor, buf, bufsize);
 		} else if (command == "DEL") {
 			deleteFile(socketDescriptor, buf, bufsize);
 		} else if (command == "MKD") {
@@ -127,6 +132,83 @@ int main(int argc, char* argv[]) {
 
 	free(buf);
 	return 0;
+}
+
+void uploadFile(int socketDescriptor, char* buf, int bufsize) {
+	// send the file name and length to server
+	string fileNameAndLength = getDirectoryNameAndLength();
+	sendMessage(socketDescriptor, fileNameAndLength);
+	
+	// get directory name
+	stringstream ss(fileNameAndLength);
+	int fileNameLength;
+	string fileName;
+	ss >> fileNameLength >> fileName;
+
+	// determine size (in bytes) of the file to upload
+	struct stat filestatus;
+	stat(fileName.c_str(), &filestatus);
+
+	// server sends ACK that it is ready to receive
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+	ostringstream oss;
+	oss << filestatus.st_size;
+	int bytesSent = 0;
+	sendMessage(socketDescriptor, oss.str());
+
+	// open file for reading
+	FILE *fp;
+	fp = fopen(fileName.c_str(), "rb");
+	if (!fp) {
+		cout << "error: file cannot be read and transferred" << endl;
+		exit(1);
+	}
+
+	// send file
+	int bytesRead;
+	while (bytesSent < filestatus.st_size) {
+		bytesRead = fread(buf, sizeof(char), sizeof(buf), fp);
+		sendMessage(socketDescriptor, buf);
+		clearBuffer(buf, bufsize);
+		bytesSent += bytesRead;
+	}
+	fclose(fp);
+
+	// wait for server to be ready for hash
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+
+	// compute MD5 hash for file transferred
+	MHASH td;
+	char filecontent[filestatus.st_size];
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
+	fclose(fPtr);
+
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+		exit(1);
+	}
+
+	mhash(td, &filecontent, 1);
+	ostringstream os;
+	os << mhash_end(td);
+	cout << os.str() << endl;
+
+	// send the MD5 hash
+	sendMessage(socketDescriptor, os.str());
+
+	/* on success: receive throughput result
+	 * on failure: receive news of failure */
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+	string result = buf;
+	if (result == "-1") {
+		cout << "File transfer failed" << endl;
+	} else {
+		cout << result << endl;
+	}
+
 }
 
 void deleteFile(int socketDescriptor, char* buf, int bufsize) {

@@ -5,7 +5,7 @@
 all: myftpd
 
 myftpd: myftpd.cpp
-	g++ myftpd.cpp -Wall -std=c++11 -o myftpd
+	g++ myftpd.cpp -Wall -std=c++11 -lmhash -o myftpd
 
 clean:
 	rm myftpd
