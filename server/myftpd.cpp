@@ -35,6 +35,7 @@ int changeDirectory(string directoryName);
 void removeDirectory(string directoryName, int socketDescriptor, char* buf, int bufsize);
 void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize);
 void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize);
+void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize);
 string intToString(int i);
 string longToString(long i);
 int stringToInt(string bytes);
@@ -128,6 +129,10 @@ int main(int argc, char* argv[]) {
 				if (command == "XIT") {
 					close(socketDescriptor);
 					break;
+				} else if (command == "REQ") {
+					if(getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
+						downloadFile(fileName, socketDescriptor, buf, bufsize);
+					}
 				} else if (command == "UPL") {
 					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
 						sendMessage(socketDescriptor, "READY");
@@ -164,6 +169,68 @@ int main(int argc, char* argv[]) {
 	free(buf);
 }
 
+// downloads file from the server to the client
+void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
+	// send file size if it exists otherwise send failure message
+	if (!fileExists(fileName)) {
+		sendMessage(socketDescriptor, "-1");
+		return;
+	}
+
+	// determine size of file (in bytes) to send	
+	struct stat filestatus;
+	stat(fileName.c_str(), &filestatus);
+
+	// send file size to client
+	ostringstream oss;
+	oss << filestatus.st_size;
+	sendMessage(socketDescriptor, oss.str());
+
+	// open file for reading
+	FILE *fp;
+	fp = fopen(fileName.c_str(), "rb");
+	if (!fp) {
+		exit(1);
+	}
+
+	// send file
+	int bytesSent = 0;
+	int bytesRead;
+	while (bytesSent < filestatus.st_size) {
+		bytesRead = fread(buf, sizeof(char), sizeof(buf), fp);
+		sendMessage(socketDescriptor, buf);
+		clearBuffer(buf, bufsize);
+		bytesSent += bytesRead;
+	}
+	fclose(fp);
+
+	// wait for client to be ready for md5 hash
+	recvMessage(socketDescriptor, buf, sizeof(buf));
+
+	// compute MD5 hash for file transferred
+	MHASH td;
+	char filecontent[filestatus.st_size];
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
+	fclose(fPtr);
+
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+		exit(1);
+	}
+
+	mhash(td, &filecontent, 1);
+	ostringstream os;
+	os << mhash_end(td);
+	cout << os.str() << endl;
+
+	// send the MD5 hash
+	sendMessage(socketDescriptor, os.str());
+	cout << "bytesSent: " << bytesSent << endl;
+}
+
 // uploads file from the client to the server
 void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	// receive size (in bytes) of file
@@ -189,12 +256,8 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 		fwrite(buf, sizeof(char), bytesReceived, fp);
 		bytesWritten += bytesReceived;
 	}
-	fclose(fp);
 	gettimeofday(&end, NULL);
-
-	// compute MD5 hash for file transferred
-	struct stat filestatus;
-	stat(fileName.c_str(), &filestatus);
+	fclose(fp);
 
 	// tell client to send hash
 	sendMessage(socketDescriptor, "Ready for MD5 Hash");
@@ -202,6 +265,10 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	// receive hash from client
 	recvMessage(socketDescriptor, buf, sizeof(buf));
 	string clientHash = buf;
+
+	// compute MD5 hash for file transferred
+	struct stat filestatus;
+	stat(fileName.c_str(), &filestatus);
 
 	MHASH td;
 	char filecontent[filestatus.st_size];
@@ -231,8 +298,7 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 		sendMessage(socketDescriptor, throughputMessage);
 	} else {
 		// clean up failed file transfer
-		bool result = fileExists(fileName);
-		if (result) {
+		if (fileExists(fileName)) {
 			remove(fileName.c_str());
 		}
 		sendMessage(socketDescriptor, "-1");

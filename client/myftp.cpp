@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string.h>
 #include <stdlib.h>
+#include <ctime>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -35,12 +36,17 @@ string getDirCommand(string input);
 bool isValidCommand(string command);
 void clearBuffer(char* buf, int bufSize);
 string getDirectoryNameAndLength();
+void downloadFile(int socketDescriptor, char* buf, int bufsize);
 void uploadFile(int socketDescriptor, char* buf, int bufsize);
 void deleteFile(int socketDescriptor, char* buf, int bufsize);
 void makeDirectory(int socketDescriptor, char* buf, int bufsize);
 void changeDirectory(int socketDescriptor, char* buf, int bufsize);
 void removeDirectory(int socketDescriptor, char* buf, int bufsize);
 int stringToInt(string s);
+string longToString(long l);
+bool fileExists(string fileName);
+double timeElapsed(struct timeval start, struct timeval end);
+double calculateThroughput(struct timeval start, struct timeval end, long bytesTranferred);
 
 int main(int argc, char* argv[]) {
 
@@ -112,6 +118,8 @@ int main(int argc, char* argv[]) {
 			recvMessage(socketDescriptor, buf, bufsize);
 			cout << endl;
 			cout << buf << endl;
+		} else if (command == "REQ") {
+			downloadFile(socketDescriptor, buf, bufsize);
 		} else if (command == "UPL") {
 			uploadFile(socketDescriptor, buf, bufsize);
 		} else if (command == "DEL") {
@@ -134,12 +142,100 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+// downloads a file from the server
+void downloadFile(int socketDescriptor, char* buf, int bufsize) {
+	// send the file name and length to server
+	string fileNameAndLength = getDirectoryNameAndLength();
+	sendMessage(socketDescriptor, fileNameAndLength);
+
+	// receive file size or failure message
+	recvMessage(socketDescriptor, buf, bufsize);
+	if (stringToInt(buf) == -1) {
+		cout << "File does not exist on the server" << endl;
+		return;
+	}
+	int totalBytes = stringToInt(buf);
+	int bytesWritten = 0;
+
+	// get file name
+	stringstream ss(fileNameAndLength);
+	int fileNameLength;
+	string fileName;
+	ss >> fileNameLength >> fileName;
+
+	// open file for writing
+	FILE* fp;
+	fp = fopen(fileName.c_str(), "wb");
+	if (!fp) {
+		cout << "error: unable to transfer file" << endl;
+		exit(1);
+	}
+
+	// time from start to end of file transfer
+	struct timeval start;
+	struct timeval end;
+	gettimeofday(&start, NULL);
+	int bytesReceived;
+	while (bytesWritten < totalBytes) {
+		bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+		fwrite(buf, sizeof(char), bytesReceived, fp);
+		bytesWritten += bytesReceived;
+	}
+	gettimeofday(&end, NULL);
+	fclose(fp);
+
+	// tell server to send md5 hash
+	sendMessage(socketDescriptor, "Ready for MD5 hash");
+
+	// receive md5 hash
+	recvMessage(socketDescriptor, buf, bufsize);
+	string serverHash = buf;
+
+	// calculate md5 hash
+	MHASH td;
+	char filecontent[bytesWritten];
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	fread(filecontent, sizeof(char), bytesWritten, fPtr);
+	fclose(fPtr);
+
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+		exit(1);
+	}
+
+	mhash(td, &filecontent, 1);
+	ostringstream os;
+	os << mhash_end(td);
+	cout << os.str() << endl;
+
+	// check that client and server hashes match
+	if (os.str() == serverHash) {
+		// calculate throughput
+		long throughput = calculateThroughput(start, end, bytesWritten);
+		string throughputMessage = longToString(bytesWritten) + " bytes transferred in ";
+		throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
+		throughputMessage += longToString(throughput) + " Megabytes/sec";
+		cout << throughputMessage << endl;
+	} //else {
+		// clean up failed file transfer
+		//if (fileExists(fileName)) {
+	//		remove(fileName.c_str());
+	//	}
+	//	cout << "File transfer failed" << endl;
+	//}
+	cout << "bytesWritten: " << bytesWritten << endl;
+
+}
+
+// uploads a file to the server
 void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	// send the file name and length to server
 	string fileNameAndLength = getDirectoryNameAndLength();
 	sendMessage(socketDescriptor, fileNameAndLength);
 	
-	// get directory name
+	// get file name
 	stringstream ss(fileNameAndLength);
 	int fileNameLength;
 	string fileName;
@@ -169,7 +265,7 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	while (bytesSent < filestatus.st_size) {
 		bytesRead = fread(buf, sizeof(char), sizeof(buf), fp);
 		sendMessage(socketDescriptor, buf);
-		clearBuffer(buf, bufsize);
+		clearBuffer(buf, sizeof(buf));
 		bytesSent += bytesRead;
 	}
 	fclose(fp);
@@ -387,4 +483,45 @@ bool isValidCommand(string command) {
 	unordered_set<string> validCommands = {"REQ", "UPL", "DEL", "LIS", "MKD", "RMD", "CHD", "XIT"};
 
 	return validCommands.find(command) != validCommands.end();
+}
+
+// check if file exists
+bool fileExists (string filename) {
+	
+	if (filename.length() == 0) return false;
+
+	FILE *pFile;
+	bool fileExists = false;
+
+	pFile = fopen(filename.c_str(), "r");
+
+	if (pFile != NULL) {
+		fileExists = true;
+		fclose(pFile);
+	}
+
+	return fileExists;
+}
+
+// convert long to string
+string longToString(long i) {
+	stringstream ss;
+	ss << i;
+
+	return ss.str();
+}
+
+// calculate time (in usec) elapsed from start to end
+double timeElapsed(struct timeval start, struct timeval end) {
+	return (start.tv_sec * 1000000.0 + start.tv_usec) - (end.tv_sec * 1000000.0 + start.tv_usec);
+}
+
+// calculate throughput for file transfer
+double calculateThroughput(struct timeval start, struct timeval end, long bytesTransferred) {
+	
+	// calculate time elapsed from start to end
+	double time = timeElapsed(start, end);
+
+	// convert bytes to bits and calculate bits / usec
+	return bytesTransferred / time;
 }
