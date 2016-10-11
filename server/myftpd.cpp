@@ -34,13 +34,15 @@ int createDirectory(string directoryName);
 int changeDirectory(string directoryName);
 void removeDirectory(string directoryName, int socketDescriptor, char* buf, int bufsize);
 void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize);
-void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize);
-void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize);
+void saveFile(string fileName, int socketDescriptor, char* buf, int bufsize);
+void sendFile(string fileName, int socketDescriptor, char* buf, int bufsize);
 string intToString(int i);
 string longToString(long i);
 int stringToInt(string bytes);
-double timeElapsed(struct timeval start, struct timeval end);
-double calculateThroughput(struct timeval start, struct timeval end, long bytesTranferred);
+double timeElapsed(struct timeval* start, struct timeval* end);
+double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTranferred);
+char* getFileHash(string fileName);
+string getTransferResults(struct timeval* start, struct timeval* end, long fileSize);
 
 int main(int argc, char* argv[]) {
 
@@ -131,12 +133,12 @@ int main(int argc, char* argv[]) {
 					break;
 				} else if (command == "REQ") {
 					if(getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
-						downloadFile(fileName, socketDescriptor, buf, bufsize);
+						sendFile(fileName, socketDescriptor, buf, bufsize);
 					}
 				} else if (command == "UPL") {
 					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
 						sendMessage(socketDescriptor, "READY");
-						uploadFile(fileName, socketDescriptor, buf, bufsize);
+						saveFile(fileName, socketDescriptor, buf, bufsize);
 					}
 				} else if (command == "DEL") {
 					if (getDirectoryNameAndLength(fileName, socketDescriptor, buf, bufsize) >= 0) {
@@ -170,7 +172,7 @@ int main(int argc, char* argv[]) {
 }
 
 // downloads file from the server to the client
-void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
+void sendFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	// send file size if it exists otherwise send failure message
 	if (!fileExists(fileName)) {
 		sendMessage(socketDescriptor, "-1");
@@ -207,33 +209,16 @@ void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize)
 	// wait for client to be ready for md5 hash
 	recvMessage(socketDescriptor, buf, bufsize);
 
-	// compute MD5 hash for file transferred
-	MHASH td;
-	FILE *fPtr;
+	char* hash = getFileHash(fileName);
+	sendMessage(socketDescriptor, hash);
 
-	fPtr = fopen(fileName.c_str(), "rb");
-
-	unsigned char filechar;
-	td = mhash_init(MHASH_MD5);
-	if (td == MHASH_FAILED) {
-		exit(1);
-	}
-
-	while (fread(&filechar, sizeof(char), 1, fPtr) == 1) {
-		mhash(td, &filechar, 1);
-	}
-
-	fclose(fPtr);
-
-	unsigned char hash[16];
-	mhash_deinit(td, hash);
-	sendMessage(socketDescriptor, (char*) hash);
+	free(hash);
 
 	cout << "bytesSent: " << bytesSent << endl;
 }
 
 // uploads file from the client to the server
-void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
+void saveFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	// receive size (in bytes) of file
 	recvMessage(socketDescriptor, buf, bufsize);
 	int totalBytes = stringToInt(buf);
@@ -254,7 +239,7 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	// write to the open file
 	int bytesReceived;
 	while (bytesWritten < totalBytes) {
-		bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+		bytesReceived = recvMessage(socketDescriptor, buf, bufsize);
 		fwrite(buf, sizeof(char), bytesReceived, fp);
 		bytesWritten += bytesReceived;
 	}
@@ -265,39 +250,20 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	sendMessage(socketDescriptor, "Ready for MD5 Hash");
 	
 	// receive hash from client
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 	string clientHash = buf;
 
 	// compute MD5 hash for file transferred
 	struct stat filestatus;
 	stat(fileName.c_str(), &filestatus);
 
-	MHASH td;
-	char filecontent[filestatus.st_size];
-	FILE *fPtr;
-
-	fPtr = fopen(fileName.c_str(), "rb");
-	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
-	fclose(fPtr);
-
-	td = mhash_init(MHASH_MD5);
-	if (td == MHASH_FAILED) {
-		exit(1);
-	}
-
-	mhash(td, &filecontent, 1);
-	ostringstream os;
-	os << mhash_end(td);
-	cout << os.str() << endl;
+	char* hash = getFileHash(fileName);
 
 	// check that client and server hash is same
-	if (os.str() == clientHash) {
+	if (string(hash) == clientHash) {
 		// calculate throughput and send it to client
-		long throughput = calculateThroughput(start, end, filestatus.st_size);
-		string throughputMessage = longToString(filestatus.st_size) + " bytes transferred in ";
-		throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
-		throughputMessage += longToString(throughput) + " Megabytes/sec";
-		sendMessage(socketDescriptor, throughputMessage);
+		string transferResults = getTransferResults(&start, &end, bytesWritten);
+		sendMessage(socketDescriptor, transferResults);
 	} else {
 		// clean up failed file transfer
 		if (fileExists(fileName)) {
@@ -305,21 +271,8 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 		}
 		sendMessage(socketDescriptor, "-1");
 	}
-}
 
-// calculate time (in usec) elapsed from start to end
-double timeElapsed(struct timeval start, struct timeval end) {
-	return (start.tv_sec * 1000000.0 + start.tv_usec) - (end.tv_sec * 1000000.0 + start.tv_usec);
-}
-
-// calculate throughput for file transfer
-double calculateThroughput(struct timeval start, struct timeval end, long bytesTransferred) {
-	
-	// calculate time elapsed from start to end
-	double time = timeElapsed(start, end);
-
-	// convert bytes to bits and calculate bits / usec
-	return bytesTransferred / time;
+	free(hash);
 }
 
 // deletes file
@@ -327,7 +280,7 @@ void deleteFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	bool result = fileExists(fileName);
 	if (result) {
 		sendMessage(socketDescriptor, "1");
-		recvMessage(socketDescriptor, buf, sizeof(buf));
+		recvMessage(socketDescriptor, buf, bufsize);
 		string choice = buf;
 
 		if (choice == "Yes") {
@@ -348,7 +301,7 @@ void removeDirectory(string directoryName, int socketDescriptor, char* buf, int 
 	bool result = directoryExists(directoryName);
 	if (result) {
 		sendMessage(socketDescriptor, "1");
-		recvMessage(socketDescriptor, buf, sizeof(buf));
+		recvMessage(socketDescriptor, buf, bufsize);
 		string choice = buf;
 
 		if (choice == "Yes") {
@@ -543,4 +496,55 @@ bool isValidCommand(string command) {
 	unordered_set<string> validCommands = {"REQ", "UPL", "DEL", "LIS", "MKD", "RMD", "CHD", "XIT"};
 
 	return validCommands.find(command) != validCommands.end();
+}
+
+// calculate time (in usec) elapsed from start to end
+double timeElapsed(struct timeval* start, struct timeval* end) {
+        struct timeval timeDiff;
+        timersub(end, start, &timeDiff);
+
+        return timeDiff.tv_sec + (double)timeDiff.tv_usec / 1000000;
+}
+
+// calculate throughput for file transfer in Megabytes / sec
+double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTransferred) {
+
+        // calculate time elapsed from start to end
+        double time = timeElapsed(start, end);
+
+        // convert bytes to bits and calculate throughput in Megabytes / sec
+        return bytesTransferred / time / 1000000;
+}
+
+string getTransferResults(struct timeval* start, struct timeval* end, long fileSize) {
+        double throughput = calculateThroughput(start, end, fileSize);
+
+		stringstream iss;
+        iss << longToString(fileSize) << " bytes transferred in " << timeElapsed(start, end) << " seconds: " << throughput << " Megabytes/sec" << endl;
+
+        return iss.str();
+}
+
+char* getFileHash(string fileName) {
+	MHASH td;
+	unsigned char filechar;
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+			exit(1);
+	}
+
+	while (fread(&filechar, sizeof(char), 1, fPtr) == 1) {
+			mhash(td, &filechar, 1);
+	}
+
+	fclose(fPtr);
+
+	unsigned char* hash = (unsigned char*)malloc(sizeof(char*) * 16);
+
+	mhash_deinit(td, hash);
+
+	return (char*)hash;
 }

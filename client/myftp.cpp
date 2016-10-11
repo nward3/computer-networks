@@ -49,6 +49,7 @@ bool fileExists(string fileName);
 double timeElapsed(struct timeval* start, struct timeval* end);
 double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTranferred);
 void displayTransferResults(struct timeval* start, struct timeval* end, long fileSize);
+char* getFileHash(string fileName);
 
 int main(int argc, char* argv[]) {
 
@@ -193,7 +194,27 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 	recvMessage(socketDescriptor, buf, bufsize);
 	string serverHash = buf;
 
-	// calculate md5 hash
+	char * hash = getFileHash(fileName);
+
+	if (string(hash) == serverHash) {
+		displayTransferResults(&start, &end, bytesWritten);
+	} else {
+		// clean up failed file transfer
+		if (fileExists(fileName)) {
+			// remove corrupted file
+			if (remove(fileName.c_str()) < 0) {
+				cout << fileName << " was created but was corrupted and was unable to be deleted. PLease delete manually." << endl;
+			}
+		}
+	}
+
+	free(hash);
+
+	cout << "bytesWritten: " << bytesWritten << endl;
+}
+
+// calculate md5 hash
+char* getFileHash(string fileName) {
 	MHASH td;
 	unsigned char filechar;
 	FILE *fPtr;
@@ -210,23 +231,11 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 
 	fclose(fPtr);
 
-	unsigned char hash[16];
+	unsigned char* hash = (unsigned char*)malloc(sizeof(char*) * 16);
 
 	mhash_deinit(td, hash);
 
-	if (string((char*)hash) == serverHash) {
-		displayTransferResults(&start, &end, bytesWritten);
-	} else {
-		// clean up failed file transfer
-		if (fileExists(fileName)) {
-			// remove corrupted file
-			if (remove(fileName.c_str()) < 0) {
-				cout << fileName << " was created but was corrupted and was unable to be deleted. PLease delete manually." << endl;
-			}
-		}
-	}
-
-	cout << "bytesWritten: " << bytesWritten << endl;
+	return (char*)hash;
 }
 
 // uploads a file to the server
@@ -246,7 +255,7 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	stat(fileName.c_str(), &filestatus);
 
 	// server sends ACK that it is ready to receive
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 	ostringstream oss;
 	oss << filestatus.st_size;
 	int bytesSent = 0;
@@ -263,41 +272,25 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	// send file
 	int bytesRead;
 	while (bytesSent < filestatus.st_size) {
-		bytesRead = fread(buf, sizeof(char), sizeof(buf), fp);
+		bytesRead = fread(buf, sizeof(char), bufsize, fp);
 		sendMessage(socketDescriptor, buf);
-		clearBuffer(buf, sizeof(buf));
+		clearBuffer(buf, bufsize);
 		bytesSent += bytesRead;
 	}
 	fclose(fp);
 
 	// wait for server to be ready for hash
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 
 	// compute MD5 hash for file transferred
-	MHASH td;
-	char filecontent[filestatus.st_size];
-	FILE *fPtr;
-
-	fPtr = fopen(fileName.c_str(), "rb");
-	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
-	fclose(fPtr);
-
-	td = mhash_init(MHASH_MD5);
-	if (td == MHASH_FAILED) {
-		exit(1);
-	}
-
-	mhash(td, &filecontent, 1);
-	ostringstream os;
-	os << mhash_end(td);
-	cout << os.str() << endl;
+	char* hash = getFileHash(fileName);
 
 	// send the MD5 hash
-	sendMessage(socketDescriptor, os.str());
+	sendMessage(socketDescriptor, hash);
 
 	/* on success: receive throughput result
 	 * on failure: receive news of failure */
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 	string result = buf;
 	if (result == "-1") {
 		cout << "File transfer failed" << endl;
@@ -305,6 +298,7 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 		cout << result << endl;
 	}
 
+	free(hash);
 }
 
 void deleteFile(int socketDescriptor, char* buf, int bufsize) {
@@ -313,7 +307,7 @@ void deleteFile(int socketDescriptor, char* buf, int bufsize) {
 	sendMessage(socketDescriptor, fileNameAndLength);
 
 	// server responds if file exists or not
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 	int result = stringToInt(buf);
 	if (result < 0) {
 		cout << "The file does not exist on server" << endl;
@@ -332,7 +326,7 @@ void deleteFile(int socketDescriptor, char* buf, int bufsize) {
 			return;
 		}
 
-		recvMessage(socketDescriptor, buf, sizeof(buf));
+		recvMessage(socketDescriptor, buf, bufsize);
 		result = stringToInt(buf);
 		if (result > 0) {
 			cout <<"File deleted" << endl;
@@ -348,7 +342,7 @@ void removeDirectory(int socketDescriptor, char* buf, int bufsize) {
 	sendMessage(socketDescriptor, directoryNameAndLength);
 	
 	// server responds if directory exists or not
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 	int result = stringToInt(buf);
 	if (result < 0) {
 		cout << "The directory does not exist on server" << endl;
@@ -367,7 +361,7 @@ void removeDirectory(int socketDescriptor, char* buf, int bufsize) {
 			return;
 		}
 
-		recvMessage(socketDescriptor, buf, sizeof(buf));
+		recvMessage(socketDescriptor, buf, bufsize);
 		result = stringToInt(buf);
 		if (result > 0) {
 			cout << "Directory deleted" << endl;
