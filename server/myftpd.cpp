@@ -197,7 +197,7 @@ void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize)
 	int bytesSent = 0;
 	int bytesRead;
 	while (bytesSent < filestatus.st_size) {
-		bytesRead = fread(buf, sizeof(char), sizeof(buf), fp);
+		bytesRead = fread(buf, sizeof(char), bufsize, fp);
 		sendMessage(socketDescriptor, buf);
 		clearBuffer(buf, bufsize);
 		bytesSent += bytesRead;
@@ -205,29 +205,30 @@ void downloadFile(string fileName, int socketDescriptor, char* buf, int bufsize)
 	fclose(fp);
 
 	// wait for client to be ready for md5 hash
-	recvMessage(socketDescriptor, buf, sizeof(buf));
+	recvMessage(socketDescriptor, buf, bufsize);
 
 	// compute MD5 hash for file transferred
 	MHASH td;
-	char filecontent[filestatus.st_size];
 	FILE *fPtr;
 
 	fPtr = fopen(fileName.c_str(), "rb");
-	fread(filecontent, sizeof(char), filestatus.st_size, fPtr);
-	fclose(fPtr);
 
+	unsigned char filechar;
 	td = mhash_init(MHASH_MD5);
 	if (td == MHASH_FAILED) {
 		exit(1);
 	}
 
-	mhash(td, &filecontent, 1);
-	ostringstream os;
-	os << mhash_end(td);
-	cout << os.str() << endl;
+	while (fread(&filechar, sizeof(char), 1, fPtr) == 1) {
+		mhash(td, &filechar, 1);
+	}
 
-	// send the MD5 hash
-	sendMessage(socketDescriptor, os.str());
+	fclose(fPtr);
+
+	unsigned char hash[16];
+	mhash_deinit(td, hash);
+	sendMessage(socketDescriptor, (char*) hash);
+
 	cout << "bytesSent: " << bytesSent << endl;
 }
 
@@ -246,6 +247,7 @@ void uploadFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	}
 
 	// time from start of transfer to completion
+	//
 	struct timeval start;
 	struct timeval end;
 	gettimeofday(&start, NULL);

@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctime>
+#include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -177,7 +178,7 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 	gettimeofday(&start, NULL);
 	int bytesReceived;
 	while (bytesWritten < totalBytes) {
-		bytesReceived = recvMessage(socketDescriptor, buf, sizeof(buf));
+		bytesReceived = recvMessage(socketDescriptor, buf, bufsize);
 		fwrite(buf, sizeof(char), bytesReceived, fp);
 		bytesWritten += bytesReceived;
 	}
@@ -193,32 +194,39 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 
 	// calculate md5 hash
 	MHASH td;
-	char filecontent[bytesWritten];
+	unsigned char filechar;
 	FILE *fPtr;
 
 	fPtr = fopen(fileName.c_str(), "rb");
-	fread(filecontent, sizeof(char), bytesWritten, fPtr);
-	fclose(fPtr);
-
 	td = mhash_init(MHASH_MD5);
 	if (td == MHASH_FAILED) {
 		exit(1);
 	}
 
-	mhash(td, &filecontent, 1);
-	ostringstream os;
-	os << mhash_end(td);
-	cout << os.str() << endl;
+	while (fread(&filechar, sizeof(char), 1, fPtr) == 1) {
+		mhash(td, &filechar, 1);
+	}
+
+	fclose(fPtr);
+
+	unsigned char hash[16];
+
+	mhash_deinit(td, hash);
+
+	if (string((char*)hash) == serverHash) {
+		cout << "hashes match" << endl;
+	} else {
+		cout << "hashes do not match" << endl;
+	}
 
 	// check that client and server hashes match
-	if (os.str() == serverHash) {
-		// calculate throughput
-		long throughput = calculateThroughput(start, end, bytesWritten);
-		string throughputMessage = longToString(bytesWritten) + " bytes transferred in ";
-		throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
-		throughputMessage += longToString(throughput) + " Megabytes/sec";
-		cout << throughputMessage << endl;
-	} //else {
+	// 	// calculate throughput
+	// 	long throughput = calculateThroughput(start, end, bytesWritten);
+	// 	string throughputMessage = longToString(bytesWritten) + " bytes transferred in ";
+	// 	throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
+	// 	throughputMessage += longToString(throughput) + " Megabytes/sec";
+	// 	cout << throughputMessage << endl;
+	// } //else {
 		// clean up failed file transfer
 		//if (fileExists(fileName)) {
 	//		remove(fileName.c_str());
@@ -226,7 +234,6 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 	//	cout << "File transfer failed" << endl;
 	//}
 	cout << "bytesWritten: " << bytesWritten << endl;
-
 }
 
 // uploads a file to the server
