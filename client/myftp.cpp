@@ -30,6 +30,7 @@ using namespace std;
 
 #define MAX_MESSAGE_LENGTH 4096
 
+int sendBuffer(int socketDescriptor, char* buf, int bufsize);
 int sendMessage(int socketDescriptor, string message);
 int recvMessage(int socketDescriptor, char* buf, int bufsize);
 string getCommand(string input);
@@ -273,7 +274,7 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	int bytesRead;
 	while (bytesSent < filestatus.st_size) {
 		bytesRead = fread(buf, sizeof(char), bufsize, fp);
-		sendMessage(socketDescriptor, buf);
+		bytesRead = sendBuffer(socketDescriptor, buf, bytesRead);
 		clearBuffer(buf, bufsize);
 		bytesSent += bytesRead;
 	}
@@ -527,4 +528,22 @@ void displayTransferResults(struct timeval* start, struct timeval* end, long fil
 	double throughput = calculateThroughput(start, end, fileSize);
 
 	cout << longToString(fileSize) << " bytes transferred in " << timeElapsed(start, end) << " seconds: " << throughput << " Megabytes/sec" << endl;
+}
+
+// sends message in the buffer
+int sendBuffer(int socketDescriptor, char* buf, int bufsize) {
+	int bytesSent;
+	int offset = 0;
+
+	while (offset < bufsize) {
+		bytesSent = send(socketDescriptor, buf + offset, bufsize - offset, 0);
+		if (bytesSent == -1) {
+			perror("client failed to send to server");
+			cout << "why dis failure?" << endl;
+			exit(1);
+		}
+		offset += bytesSent;
+	}
+
+	return offset;
 }

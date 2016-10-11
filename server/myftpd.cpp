@@ -22,6 +22,7 @@ using namespace std;
 
 #define MAX_MESSAGE_LENGTH 4096
 
+int sendBuffer(int socketDescriptor, char* buf, int bufsize);
 int getDirectoryNameAndLength(string &directoryname, int socketDescriptor, char* buf, int bufsize);
 void clearBuffer(char* buf, int bufsize);
 int sendMessage(int socketDescriptor, string message);
@@ -200,7 +201,7 @@ void sendFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	int bytesRead;
 	while (bytesSent < filestatus.st_size) {
 		bytesRead = fread(buf, sizeof(char), bufsize, fp);
-		sendMessage(socketDescriptor, buf);
+		bytesRead = sendBuffer(socketDescriptor, buf, bytesRead);
 		clearBuffer(buf, bufsize);
 		bytesSent += bytesRead;
 	}
@@ -213,8 +214,6 @@ void sendFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	sendMessage(socketDescriptor, hash);
 
 	free(hash);
-
-	cout << "bytesSent: " << bytesSent << endl;
 }
 
 // uploads file from the client to the server
@@ -228,11 +227,11 @@ void saveFile(string fileName, int socketDescriptor, char* buf, int bufsize) {
 	FILE* fp;
 	fp = fopen(fileName.c_str(), "wb");
 	if (!fp) {
+		perror("cannot open file for writing");
 		exit(1);
 	}
 
 	// time from start of transfer to completion
-	//
 	struct timeval start;
 	struct timeval end;
 	gettimeofday(&start, NULL);
@@ -466,14 +465,32 @@ string getDirectoryListing(int socketDescriptor) {
 	}
 }
 
+// sends message in the buffer
+int sendBuffer(int socketDescriptor, char* buf, int bufsize) {
+	int bytesSent;
+	int offset = 0;
+
+	while (offset < bufsize) {
+		bytesSent = send(socketDescriptor, buf + offset, bufsize - offset, 0);
+		if (bytesSent == -1) {
+			perror("client failed to send to server");
+			exit(1);
+		}
+		offset += bytesSent;
+	}
+
+	return offset;
+}
+
 // sends message to server. Includes error checking
 int sendMessage(int socketDescriptor, string message) {
 	int sendResult = send(socketDescriptor, message.c_str(), message.length(), 0);
+
 	if (sendResult == -1) {
 		perror("client failed to send to server");
 		exit(1);
 	}
-	
+
 	return sendResult;
 }
 
