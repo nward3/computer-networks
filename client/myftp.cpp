@@ -46,8 +46,9 @@ void removeDirectory(int socketDescriptor, char* buf, int bufsize);
 int stringToInt(string s);
 string longToString(long l);
 bool fileExists(string fileName);
-double timeElapsed(struct timeval start, struct timeval end);
-double calculateThroughput(struct timeval start, struct timeval end, long bytesTranferred);
+double timeElapsed(struct timeval* start, struct timeval* end);
+double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTranferred);
+void displayTransferResults(struct timeval* start, struct timeval* end, long fileSize);
 
 int main(int argc, char* argv[]) {
 
@@ -214,25 +215,17 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 	mhash_deinit(td, hash);
 
 	if (string((char*)hash) == serverHash) {
-		cout << "hashes match" << endl;
+		displayTransferResults(&start, &end, bytesWritten);
 	} else {
-		cout << "hashes do not match" << endl;
+		// clean up failed file transfer
+		if (fileExists(fileName)) {
+			// remove corrupted file
+			if (remove(fileName.c_str()) < 0) {
+				cout << fileName << " was created but was corrupted and was unable to be deleted. PLease delete manually." << endl;
+			}
+		}
 	}
 
-	// check that client and server hashes match
-	// 	// calculate throughput
-	// 	long throughput = calculateThroughput(start, end, bytesWritten);
-	// 	string throughputMessage = longToString(bytesWritten) + " bytes transferred in ";
-	// 	throughputMessage += longToString(timeElapsed(start, end)) + " seconds: ";
-	// 	throughputMessage += longToString(throughput) + " Megabytes/sec";
-	// 	cout << throughputMessage << endl;
-	// } //else {
-		// clean up failed file transfer
-		//if (fileExists(fileName)) {
-	//		remove(fileName.c_str());
-	//	}
-	//	cout << "File transfer failed" << endl;
-	//}
 	cout << "bytesWritten: " << bytesWritten << endl;
 }
 
@@ -519,16 +512,25 @@ string longToString(long i) {
 }
 
 // calculate time (in usec) elapsed from start to end
-double timeElapsed(struct timeval start, struct timeval end) {
-	return (start.tv_sec * 1000000.0 + start.tv_usec) - (end.tv_sec * 1000000.0 + start.tv_usec);
+double timeElapsed(struct timeval* start, struct timeval* end) {
+	struct timeval timeDiff;
+	timersub(end, start, &timeDiff);
+
+	return timeDiff.tv_sec + (double)timeDiff.tv_usec / 1000000;
 }
 
-// calculate throughput for file transfer
-double calculateThroughput(struct timeval start, struct timeval end, long bytesTransferred) {
+// calculate throughput for file transfer in Megabytes / sec
+double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTransferred) {
 	
 	// calculate time elapsed from start to end
 	double time = timeElapsed(start, end);
 
-	// convert bytes to bits and calculate bits / usec
-	return bytesTransferred / time;
+	// convert bytes to bits and calculate throughput in Megabytes / sec
+	return bytesTransferred / time / 1000000;
+}
+
+void displayTransferResults(struct timeval* start, struct timeval* end, long fileSize) {
+	double throughput = calculateThroughput(start, end, fileSize);
+
+	cout << longToString(fileSize) << " bytes transferred in " << timeElapsed(start, end) << " seconds: " << throughput << " Megabytes/sec" << endl;
 }
