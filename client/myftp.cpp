@@ -155,7 +155,7 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 	// receive file size or failure message
 	recvMessage(socketDescriptor, buf, bufsize);
 	if (stringToInt(buf) == -1) {
-		cout << "File does not exist on the server" << endl;
+		cout << "The file does not exist on the server" << endl;
 		return;
 	}
 	int totalBytes = stringToInt(buf);
@@ -243,13 +243,21 @@ char* getFileHash(string fileName) {
 void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 	// send the file name and length to server
 	string fileNameAndLength = getDirectoryNameAndLength();
-	sendMessage(socketDescriptor, fileNameAndLength);
 	
 	// get file name
 	stringstream ss(fileNameAndLength);
 	int fileNameLength;
 	string fileName;
 	ss >> fileNameLength >> fileName;
+
+	if (!fileExists(fileName)) {
+		cout << "error: File does not exist" << endl;
+		sendMessage(socketDescriptor, "abort");
+
+		return;
+	}
+
+	sendMessage(socketDescriptor, fileNameAndLength);
 
 	// determine size (in bytes) of the file to upload
 	struct stat filestatus;

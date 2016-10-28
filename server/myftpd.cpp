@@ -106,8 +106,6 @@ int main(int argc, char* argv[]) {
 		if ((socketDescriptor = accept(socketfd, (struct sockaddr *) &server_addr, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
-		} else {
-			cout << "new connection established" << endl;
 		}
 
 		// receive and process client message
@@ -122,8 +120,6 @@ int main(int argc, char* argv[]) {
 				cout << "error: unable to receive client's message" << endl;
 				exit(1);
 			} else if (bytesReceived > 0) {
-				cout << "TCP server received: " << buf << endl;
-
 				// process client command
 				string command = buf;
 
@@ -352,6 +348,11 @@ int getDirectoryNameAndLength(string &directoryName, int socketDescriptor, char*
 	recvMessage(socketDescriptor, buf, bufsize);
 	string directoryData = buf;
 
+	// if data was not in the form <dirlen dirname>
+	if (directoryData.find(' ') == string::npos) {
+		return -1;
+	}
+
 	// parse dirlen and dirname from directoryData string
 	unsigned dirlen;
 	stringstream ss(directoryData);
@@ -417,8 +418,6 @@ bool directoryExists (string pathname) {
 	if (pDir != NULL) {
 		dirExists = true;
 		closedir(pDir);								
-	} else {
-		cout << "error: " << strerror(errno) << endl;
 	}
 
 	return dirExists;
@@ -435,10 +434,15 @@ bool fileExists (string filename) {
 	pFile = fopen(filename.c_str(), "r");
 
 	if (pFile != NULL) {
-		fileExists = true;
+		struct stat path_stat;
+		stat(filename.c_str(), &path_stat);
+		if (S_ISREG(path_stat.st_mode)) {
+			fileExists = true;
+		} else {
+			// not an actual file (ie a directory)
+			fileExists = false;
+		}
 		fclose(pFile);
-	} else {
-		cout << "error: " << strerror(errno) << endl;
 	}
 
 	return fileExists;
