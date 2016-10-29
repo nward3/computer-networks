@@ -51,6 +51,7 @@ double timeElapsed(struct timeval* start, struct timeval* end);
 double calculateThroughput(struct timeval* start, struct timeval* end, long bytesTranferred);
 void displayTransferResults(struct timeval* start, struct timeval* end, long fileSize);
 char* getFileHash(string fileName);
+string getHash(string fileName);
 
 int main(int argc, char* argv[]) {
 
@@ -199,19 +200,51 @@ void downloadFile(int socketDescriptor, char* buf, int bufsize) {
 
 	if (string(hash) == serverHash) {
 		displayTransferResults(&start, &end, bytesWritten);
+		cout << "File MD5sum: " << getHash(fileName) << endl;
 	} else {
 		// clean up failed file transfer
 		if (fileExists(fileName)) {
 			// remove corrupted file
 			if (remove(fileName.c_str()) < 0) {
-				cout << fileName << " was created but was corrupted and was unable to be deleted. PLease delete manually." << endl;
+				cout << fileName << " was created but was corrupted and was unable to be deleted. Please delete manually." << endl;
 			}
 		}
 	}
 
 	free(hash);
 
-	cout << "bytesWritten: " << bytesWritten << endl;
+}
+
+// calculate md5 hash
+string getHash(string fileName) {
+	MHASH td;
+	unsigned char filechar;
+	FILE *fPtr;
+
+	fPtr = fopen(fileName.c_str(), "rb");
+	td = mhash_init(MHASH_MD5);
+	if (td == MHASH_FAILED) {
+		exit(1);
+	}
+
+	while (fread(&filechar, sizeof(char), 1, fPtr) == 1) {
+		mhash(td, &filechar, 1);
+	}
+
+	fclose(fPtr);
+
+	unsigned char* hash = (unsigned char*)malloc(sizeof(char*) * 16);
+
+	mhash_deinit(td, hash);
+
+	string result = "";
+	char tempbuf[32];
+	for (int i=0; i<16; i++) {
+		sprintf(tempbuf, "%02x", hash[i]);
+		result.append(tempbuf);
+	}
+
+	return result;
 }
 
 // calculate md5 hash
@@ -305,6 +338,7 @@ void uploadFile(int socketDescriptor, char* buf, int bufsize) {
 		cout << "File transfer failed" << endl;
 	} else {
 		cout << result << endl;
+		cout << "File MD5sum: " << getHash(fileName) << endl;
 	}
 
 	free(hash);
@@ -547,7 +581,6 @@ int sendBuffer(int socketDescriptor, char* buf, int bufsize) {
 		bytesSent = send(socketDescriptor, buf + offset, bufsize - offset, 0);
 		if (bytesSent == -1) {
 			perror("client failed to send to server");
-			cout << "why dis failure?" << endl;
 			exit(1);
 		}
 		offset += bytesSent;
