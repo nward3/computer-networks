@@ -1,7 +1,5 @@
 Nick Ward, Luke Garrison
 
-netIDs: nward3, lgarriso
-
 The files contained in this submission are README.md and directories server and
 client. The server directory contains makefile and myftpd.cpp. The client directory
 contains makefile and myftp.cpp.
