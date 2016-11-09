@@ -109,10 +109,30 @@ int main(int argc, char* argv[]) {
 
 		// checks if new user or existing user and requests password
 		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+		string user = buf;
+		bool newUser = false;
 		
-
+		auto search = users.find(user);
+		if (search != users.end()) {
+			sendMessageUDP(socketDescriptorUDP, &sin, "password");
+		} else {
+			newUser = true;
+			sendMessageUDP(socketDescriptorUDP, &sin, "password");
+		}
+		
 		// register new user or checks to see if the password matches
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+		string password = buf;
 		
+		if (newUser) {
+			users[user] = password;
+		} else {
+			while (users[user] != password) {
+				sendMessageUDP(socketDescriptorUDP, &sin, "password incorrect. try again");
+				recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+				password = buf;
+			}
+		}
 		
 		// send ACK on successful login
 		sendMessageUDP(socketDescriptorUDP, &sin, "successfully logged in");
