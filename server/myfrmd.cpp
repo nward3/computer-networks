@@ -47,12 +47,13 @@ int main(int argc, char* argv[]) {
 	// determine admin password
 	string adminPassword = argv[2];
 
-	// build address data structure
-	struct sockaddr_in sin;
-	bzero((char *) &sin, sizeof(sin));
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr = INADDR_ANY;
-	sin.sin_port = htons(port);
+	// build address data structure for udp
+	struct sockaddr_in sinUDP;
+	struct sockaddr_in clientaddr;
+	bzero((char *) &sinUDP, sizeof(sinUDP));
+	sinUDP.sin_family = AF_INET;
+	sinUDP.sin_addr.s_addr = INADDR_ANY;
+	sinUDP.sin_port = htons(port);
 
 	// udp socket creation
 	int socketDescriptorUDP;
@@ -60,6 +61,19 @@ int main(int argc, char* argv[]) {
 		cout << "error: unable to create udp socket" << endl;
 		exit(1);
 	}
+
+	// bind the udp socket to the specified address
+	if (bind(socketDescriptorUDP, (struct sockaddr *) &sinUDP, sizeof(sinUDP)) < 0) {
+		cout << "error: unable to bind socket" << endl;
+		exit(1);
+	}
+
+	// build address data structure for udp
+	struct sockaddr_in sinTCP;
+	bzero((char *) &sinTCP, sizeof(sinTCP));
+	sinTCP.sin_family = AF_INET;
+	sinTCP.sin_addr.s_addr = INADDR_ANY;
+	sinTCP.sin_port = htons(port);
 
 	// tcp socket creation
 	socklen_t len;
@@ -76,8 +90,8 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
-	// bind the socket to the specified address
-	if (bind(socketDescriptorTCP, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+	// bind the tcp socket to the specified address
+	if (bind(socketDescriptorTCP, (struct sockaddr *) &sinTCP, sizeof(sinTCP)) < 0) {
 		cout << "error: unable to bind socket" << endl;
 		exit(1);
 	}
@@ -99,51 +113,56 @@ int main(int argc, char* argv[]) {
 		
 		// try to accept client connection on tcp socket
 		int descriptor;
-		if ((descriptor = accept(socketDescriptorTCP, (struct sockaddr *)&sin, &len)) < 0) {
+		if ((descriptor = accept(socketDescriptorTCP, (struct sockaddr *)&sinUDP, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
 		}
 
+		// initial client contact & determine clientaddr
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
+
 		// send request for username
-		sendMessageUDP(socketDescriptorUDP, &sin, "username");
+		sendMessageUDP(socketDescriptorUDP, &clientaddr, "username: ");
 
 		// checks if new user or existing user and requests password
-		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
 		string user = buf;
 		bool newUser = false;
 		
 		auto search = users.find(user);
 		if (search != users.end()) {
-			sendMessageUDP(socketDescriptorUDP, &sin, "password");
+			sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
 		} else {
 			newUser = true;
-			sendMessageUDP(socketDescriptorUDP, &sin, "password");
+			sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
 		}
 		
 		// register new user or checks to see if the password matches
-		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
 		string password = buf;
-		
+
 		if (newUser) {
 			users[user] = password;
 		} else {
 			while (users[user] != password) {
-				sendMessageUDP(socketDescriptorUDP, &sin, "password incorrect. try again");
-				recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sin);
+				sendMessageUDP(socketDescriptorUDP, &clientaddr, "password incorrect. try again");
+				recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
 				password = buf;
 			}
 		}
 		
 		// send ACK on successful login
-		sendMessageUDP(socketDescriptorUDP, &sin, "successfully logged in");
+		sendMessageUDP(socketDescriptorUDP, &sinUDP, "successfully logged in");
 		
 		// receive and process client operations
 		while(1) {
+
 			if (command == "XIT") {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
 			}
+
 		}
 	}
 
@@ -152,23 +171,17 @@ int main(int argc, char* argv[]) {
 
 /* send data udp style */
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
-	int bytesSent;
-	int totalBytesSent = 0;
 	const char* buf = msg.c_str();
 	int msglen = msg.length();
 
-	while (totalBytesSent < msglen) {
-		bytesSent = sendto(socketDescriptor, buf + bytesSent, msglen - bytesSent, 0, (struct sockaddr*) &sin, sizeof(struct sockaddr));
+	int bytesSent = sendto(socketDescriptor, buf, msglen, 0, (struct sockaddr*) sin, sizeof(struct sockaddr));
 
-		if (bytesSent == -1) {
-			perror("server failed to send to client");
-			exit(1);
-		}
-
-		totalBytesSent += bytesSent;
+	if (bytesSent == -1) {
+		perror("server failed to send to client");
+		exit(1);
 	}
 
-	return totalBytesSent;
+	return bytesSent;
 }
 
 /* send data tcp style */
@@ -197,7 +210,7 @@ int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr
 	bzero(buf, bufsize);
 	socklen_t addr_len;
 	
-	int recvResult = recvfrom(socketDescriptor, buf, bufsize, 0, (struct sockaddr*)&sin, &addr_len);
+	int recvResult = recvfrom(socketDescriptor, buf, bufsize, 0, (struct sockaddr*)sin, &addr_len);
 	if (recvResult == -1) {
 		perror("server failed to receive from client");
 		exit(1);
