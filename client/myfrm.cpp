@@ -31,6 +31,7 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
 int sendMessageTCP(int socketDescriptor, string msg);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
+void promptUserForOperation();
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -129,6 +130,7 @@ int main(int argc, char* argv[]) {
 	// main loop that interprets commands
 	string command;
 	while(1) {
+		promptUserForOperation();
 		cin >> command;
 
 		sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
@@ -137,6 +139,18 @@ int main(int argc, char* argv[]) {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
 			exit(0);
+		} else if (command == "SHT") {
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+			string result = buf;
+
+			if (result == "success") {
+				close(socketDescriptorUDP);
+				close(socketDescriptorTCP);
+				break;
+			} else {
+				cout << buf;
+			}
+
 		} else {
 			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
 			cout << buf;
@@ -147,6 +161,21 @@ int main(int argc, char* argv[]) {
 
 	free(buf);
 	return 0;
+}
+
+void promptUserForOperation() {
+	cout << "Please choose one of the following commands:" << endl;
+	cout << "CRT - create a new message board on the server" << endl;
+	cout << "MSG - leave a message on a board" << endl;
+	cout << "DLT - delete a message on a board" << endl;
+	cout << "EDT - edit a message on a board" << endl;
+	cout << "RDB - read a board" << endl;
+	cout << "LIS - list the names of the board on the server" << endl;
+	cout << "APN - append a file to a board" << endl;
+	cout << "DWN - download a file to a board" << endl;
+	cout << "DST - destroy a board" << endl;
+	cout << "XIT - close connection to server and exit" << endl;
+	cout << "SHT - shutdown the server and exit" << endl;
 }
 
 /* helper function to handle sending a message via udp. handles errors

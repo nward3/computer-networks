@@ -11,7 +11,7 @@ class Board {
 	public:
 		Board(string boardname, string user);
 		~Board();
-		void addMessage(string message);
+		void addMessage(string message, string username);
 		bool removeMessage(int messageNum);
 
 	private:

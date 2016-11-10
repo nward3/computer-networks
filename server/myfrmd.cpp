@@ -24,7 +24,7 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
 int sendMessageTCP(int socketDescriptor, string msg);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
-
+bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
 
 int main(int argc, char* argv[]) {
 
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
 		
 		// try to accept client connection on tcp socket
 		int descriptor;
-		if ((descriptor = accept(socketDescriptorTCP, (struct sockaddr *)&sinUDP, &len)) < 0) {
+		if ((descriptor = accept(socketDescriptorTCP, (struct sockaddr *)&sinTCP, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
 		}
@@ -121,45 +121,59 @@ int main(int argc, char* argv[]) {
 		// initial client contact & determine clientaddr
 		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
 
-		// send request for username
-		sendMessageUDP(socketDescriptorUDP, &clientaddr, "username: ");
+		// request username and password
+		bool loggedOut = true;
+		while (loggedOut) {
 
-		// checks if new user or existing user and requests password
-		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
-		string user = buf;
-		bool newUser = false;
-		
-		auto search = users.find(user);
-		if (search != users.end()) {
-			sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
-		} else {
-			newUser = true;
-			sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
-		}
-		
-		// register new user or checks to see if the password matches
-		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
-		string password = buf;
+			// send request for username
+			sendMessageUDP(socketDescriptorUDP, &clientaddr, "username: ");
 
-		if (newUser) {
-			users[user] = password;
-		} else {
-			while (users[user] != password) {
-				sendMessageUDP(socketDescriptorUDP, &clientaddr, "password incorrect. try again");
-				recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
-				password = buf;
+			// checks if new user or existing user and requests password
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
+			string user = buf;
+			bool newUser = false;
+
+			auto search = users.find(user);
+			if (search != users.end()) {
+				sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
+			} else {
+				newUser = true;
+				sendMessageUDP(socketDescriptorUDP, &clientaddr, "password: ");
+			}
+		
+			// register new user or checks to see if the password matches
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
+			string password = buf;
+
+			if (newUser) {
+				users[user] = password;
+				loggedOut = false;
+			} else if (users[user] == password) {
+				loggedOut = false;
 			}
 		}
 		
 		// send ACK on successful login
-		sendMessageUDP(socketDescriptorUDP, &sinUDP, "successfully logged in");
-		
+		sendMessageUDP(socketDescriptorUDP, &clientaddr, "login success");
+
 		// receive and process client operations
 		while(1) {
+
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
+			command = buf;
 
 			if (command == "XIT") {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
+				break;
+			} else if (command == "SHT") {
+				run = shutdownServer(socketDescriptorUDP, buf, bufsize, &clientaddr, adminPassword);
+				
+				if (!run) {
+					close(socketDescriptorUDP);
+					close(socketDescriptorTCP);
+				}
+
 				break;
 			}
 
@@ -167,6 +181,26 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* shutdown the server */
+bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword) {
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	string password = buf;
+
+	if (password == adminPassword) {
+		sendMessageUDP(socketDescriptor, sin, "shutdown");
+
+		// TODO: delete all board files and all appended files
+
+
+		return true;
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "incorrect password");
+
+		return false;
+	}
+
 }
 
 /* send data udp style */

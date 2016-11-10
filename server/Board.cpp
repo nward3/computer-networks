@@ -29,9 +29,9 @@ Board::~Board() {
 }
 
 // add a message to the messages vector and write the message out to the board file
-void Board::addMessage(string message) {
+void Board::addMessage(string message, string username) {
 	messages.push_back(message);
-	boardFileStream << message << endl;
+	boardFileStream << message << "written by: " << username << endl;
 }
 
 // returns true if removal was successful, ralse otherwise
