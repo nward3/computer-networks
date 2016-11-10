@@ -102,27 +102,44 @@ int main(int argc, char* argv[]) {
 	char buf[MAX_MESSAGE_LENGTH];
 	int bufsize = sizeof(buf);
 
-	string username, password;
-	cout << "username: ";
-	cin >> username;
-	sendMessageUDP(socketDescriptorUDP, &sinUDP, username);
-	recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
-	cout << buf;
-	cin >> password;
-	sendMessageUDP(socketDescriptorUDP, &sinUDP, password);
+	sendMessageUDP(socketDescriptorUDP, &sinUDP, "init");
+
+	while (true) {
+		string username, password;
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		cout << buf;
+		cin >> username;
+		sendMessageUDP(socketDescriptorUDP, &sinUDP, username);
+
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		cout << buf;
+		cin >> password;
+		sendMessageUDP(socketDescriptorUDP, &sinUDP, password);
+
+		recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		string response = buf;
+
+		cout << buf << endl;
+
+		if (response == "login success") {
+			break;
+		}
+	}
 
 	// main loop that interprets commands
 	string command;
 	while(1) {
 		cin >> command;
-		cout << "here 2" << endl;
 
-		// sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
+		sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
 
 		if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
 			exit(0);
+		} else {
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+			cout << buf;
 		}
 
 		cout << endl;
