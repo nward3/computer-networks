@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include "Board.h"
 using namespace std;
 
 #define MAX_MESSAGE_LENGTH 4096
@@ -30,6 +31,9 @@ int main(int argc, char* argv[]) {
 
 	// hash map for usernames and passwords
 	unordered_map<string, string> users;
+
+	// message boards - name of board to board itself
+	unordered_map<string, Board> boards;
 
 	// check for proper function invocation
 	if (argc != 3) {
@@ -123,6 +127,7 @@ int main(int argc, char* argv[]) {
 
 		// request username and password
 		bool loggedOut = true;
+		string user;
 		while (loggedOut) {
 
 			// send request for username
@@ -130,7 +135,7 @@ int main(int argc, char* argv[]) {
 
 			// checks if new user or existing user and requests password
 			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
-			string user = buf;
+			user = buf;
 			bool newUser = false;
 
 			auto search = users.find(user);
@@ -183,6 +188,21 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+/* create a new board in the message board forum */
+void createBoard(unordered_map<string, Board> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	string boardname = buf;
+
+	auto search = boards.find(boardname);
+	if (search != boards.end()) {
+		boards[boardname] = Board(boardname, username);
+		sendMessageUDP(socketDescriptor, sin, "board successfully created");
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "board creation failed");
+	}
+
+}
+
 /* shutdown the server */
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword) {
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
@@ -192,7 +212,7 @@ bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockadd
 		sendMessageUDP(socketDescriptor, sin, "shutdown");
 
 		// TODO: delete all board files and all appended files
-
+		
 
 		return true;
 	} else {

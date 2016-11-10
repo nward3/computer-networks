@@ -135,7 +135,13 @@ int main(int argc, char* argv[]) {
 
 		sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
 
-		if (command == "XIT") {
+		if (command == "CRT") {
+			string boardname;
+			cin >> boardname;
+			sendMessageUDP(socketDescriptorUDP, &sinUDP, boardname);
+			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+			cout << buf << endl;
+		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
 			exit(0);
