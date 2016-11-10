@@ -29,6 +29,8 @@ using namespace std;
 
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
 int sendMessageTCP(int socketDescriptor, string msg);
+int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -64,11 +66,17 @@ int main(int argc, char* argv[]) {
 	}
 
 	// build address data structure
-	struct sockaddr_in sin;
-	bzero((char*)&sin, sizeof(sin));
-	sin.sin_family = AF_INET;
-	bcopy((char*)hp->h_addr, (char*)&sin.sin_addr.s_addr, hp->h_length);
-	sin.sin_port=htons(port);
+	struct sockaddr_in sinTCP;
+	bzero((char*)&sinTCP, sizeof(sinTCP));
+	sinTCP.sin_family = AF_INET;
+	bcopy((char*)hp->h_addr, (char*)&sinTCP.sin_addr.s_addr, hp->h_length);
+	sinTCP.sin_port=htons(port);
+
+	struct sockaddr_in sinUDP;
+	bzero((char*)&sinUDP, sizeof(sinUDP));
+	sinUDP.sin_family = AF_INET;
+	bcopy((char*)hp->h_addr, (char*)&sinUDP.sin_addr.s_addr, hp->h_length);
+	sinUDP.sin_port=htons(port);
 
 	// create the socket
 	int socketDescriptorTCP;
@@ -78,12 +86,11 @@ int main(int argc, char* argv[]) {
 	}
 
 	// connect to server
-	if (connect(socketDescriptorTCP, (struct sockaddr*)&sin, sizeof(sin)) < 0) {
+	if (connect(socketDescriptorTCP, (struct sockaddr*)&sinTCP, sizeof(sinTCP)) < 0) {
 		perror("Connection to server failed");
 		close(socketDescriptorTCP);
 		exit(1);
 	}
-
 
 	// UDP socket creation
 	int socketDescriptorUDP;
@@ -95,12 +102,22 @@ int main(int argc, char* argv[]) {
 	char buf[MAX_MESSAGE_LENGTH];
 	int bufsize = sizeof(buf);
 
+	string username, password;
+	cout << "username: ";
+	cin >> username;
+	sendMessageUDP(socketDescriptorUDP, &sinUDP, username);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
+	cout << buf;
+	cin >> password;
+	sendMessageUDP(socketDescriptorUDP, &sinUDP, password);
+
 	// main loop that interprets commands
 	string command;
 	while(1) {
 		cin >> command;
+		cout << "here 2" << endl;
 
-		sendMessageUDP(socketDescriptorUDP, &sin, command);
+		// sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
 
 		if (command == "XIT") {
 			close(socketDescriptorTCP);
@@ -118,23 +135,17 @@ int main(int argc, char* argv[]) {
 /* helper function to handle sending a message via udp. handles errors
  */
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
-	int bytesSent;
-	int totalBytesSent = 0;
 	const char* buf = msg.c_str();
 	int msglen = msg.length();
 
-	while (totalBytesSent < msglen) {
-		bytesSent = sendto(socketDescriptor, buf + totalBytesSent, msglen - totalBytesSent, 0, (struct sockaddr*)&sin, sizeof(struct sockaddr));
+	int bytesSent = sendto(socketDescriptor, buf, msglen, 0, (struct sockaddr*)sin, sizeof(struct sockaddr));
 
-		if (bytesSent == -1) {
-			perror("client failed to send to server");
-			exit(1);
-		}
-
-		totalBytesSent += bytesSent;
+	if (bytesSent == -1) {
+		perror("client failed to send to server");
+		exit(1);
 	}
 
-	return totalBytesSent;
+	return bytesSent;
 }
 
 /* helper function to handle sending a message to a server via tcp. handles errors
@@ -157,4 +168,31 @@ int sendMessageTCP(int socketDescriptor, string msg) {
 	}
 
 	return totalBytesSent;
+}
+
+/* receive data udp style */
+int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	bzero(buf, bufsize);
+	socklen_t addr_len;
+
+	int recvResult = recvfrom(socketDescriptor, buf, bufsize, 0, (struct sockaddr*)sin, &addr_len);
+	if (recvResult == -1) {
+		perror("server failed to receive from client");
+		exit(1);
+	}
+
+	return recvResult;
+}
+
+/* receive data tcp style */
+int recvMessageTCP(int socketDescriptor, char* buf, int bufsize) {
+	bzero(buf, bufsize);
+
+	int recvResult = recv(socketDescriptor, buf, bufsize, 0);
+	if (recvResult == -1) {
+		perror("server failed to receive from client");
+		exit(1);
+	}
+
+	return recvResult;
 }
