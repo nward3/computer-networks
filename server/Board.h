@@ -18,11 +18,13 @@ class Board {
 		bool editMessage(string newMessage, int messageNum, string user);
 		string getUser() { return user; }
 		string getBoardFileName() { return boardFileName; }
+		void appendBoardAttachment(string filename);
 
 	private:
 		bool fileExists(string filename);
 
 		vector<Message> messages;
+		vector<string> boardAttachments;
 		vector<string> filenames;
 		string user;
 		string boardFileName;

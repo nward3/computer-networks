@@ -22,7 +22,14 @@ Board::Board(const Board &board) {
 
 // delete all attachments
 Board::~Board() {
-
+	for (string filename : boardAttachments) {
+		if (fileExists(filename)) {
+			int status = remove(filename.c_str());
+			if (status != 0) {
+				cout << "error: failed to delete file: '" << filename << "'" << endl;
+			}
+		}
+	}
 }
 
 // add a message to the messages vector and write the message out to the board file
@@ -65,6 +72,11 @@ bool Board::editMessage(string newMessage, int messageNum, string user) {
 
 		return true;
 	}
+}
+
+/* add the file name of an attachment to a list of the board's attachments */
+void Board::appendBoardAttachment(string filename) {
+	boardAttachments.push_back(filename);
 }
 
 bool Board::fileExists (string filename) {
