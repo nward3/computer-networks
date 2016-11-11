@@ -10,6 +10,7 @@ class Message {
 		Message(string messageText, string user);
 		string getUser();
 		string getMessageText();
+		void setMessageText(string newText);
 
 	private:
 		string user;

@@ -36,6 +36,7 @@ bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sock
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
+void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -145,6 +146,8 @@ int main(int argc, char* argv[]) {
 			deleteMessageFromBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if(command == "DST") {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if (command == "EDT") {
+			editMessage(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "MSG") {
 			addMessageToBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
@@ -169,6 +172,31 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+/* allows the user to specify a message to edit */
+void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
+	string boardname, messageNumber, newMessage;
+
+	// get board and message data to send to server
+	cout << "board name: ";
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << "message number: ";
+	cin >> messageNumber;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, messageNumber);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << "new message: ";
+	cin.ignore();
+	getline(cin, newMessage);
+	sendMessageUDP(socketDescriptorUDP, sinUDP, newMessage);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << buf << endl;
+}
+
+/* delete the user specified message from the specified board, if it exists */
 void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
 	string boardname, messageNumber;
 
@@ -196,7 +224,8 @@ void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct s
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
 
 	cout << "message: ";
-	cin >> message;
+	cin.ignore();
+	getline(cin, message);
 	sendMessageUDP(socketDescriptorUDP, sinUDP, message);
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
 

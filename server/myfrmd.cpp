@@ -34,6 +34,7 @@ bool boardExists(unordered_map<string, Board*> &boards, string boardname);
 void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards);
 void addMessageToBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+void editMessage(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -179,6 +180,8 @@ int main(int argc, char* argv[]) {
 				createBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "DLT") {
 				deleteMessageFromBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "EDT") {
+				editMessage(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "MSG") {
 				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "XIT") {
@@ -201,6 +204,36 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* edits the specified message if the board exists and the user has permission */
+void editMessage(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname, newMessage;
+	int messageNumber;
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	boardname = buf;
+	sendMessageUDP(socketDescriptor, sin, "ACK");
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	messageNumber = stringToInt(buf);
+	sendMessageUDP(socketDescriptor, sin, "ACK");
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	newMessage = buf;
+
+	if (boardExists(boards, boardname)) {
+		// try to delete the message from the board
+		Board* board = boards[boardname];
+		bool messageDeleted = board->editMessage(newMessage, messageNumber, user);
+		if (messageDeleted) {
+			sendMessageUDP(socketDescriptor, sin, "Message successfully updated");
+		} else {
+			sendMessageUDP(socketDescriptor, sin, "Unable to edit the message. You either don't have permission to edit it or the message doesn't exist");
+		}
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' does not exist");
+	}
 }
 
 /* delete the specified message from the board if the user is the one who posted it */

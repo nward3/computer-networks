@@ -49,6 +49,24 @@ bool Board::deleteMessage(int messageNum, string user) {
 	}
 }
 
+// returns true if removal was successful, ralse otherwise
+bool Board::editMessage(string newMessage, int messageNum, string user) {
+	int messageIndex = messageNum - 1;
+
+	if (messageIndex < 0 || (unsigned) messageIndex >= messages.size()) {
+		return false;
+	}
+	else if (messages[messageIndex].getUser() != user) {
+		// check that the user is the same user who posted the message
+		return false;
+	} else {
+		// edit's the message's text
+		messages[messageIndex].setMessageText(newMessage);
+
+		return true;
+	}
+}
+
 bool Board::fileExists (string filename) {
 	if (filename.length() == 0) {
 		return false;

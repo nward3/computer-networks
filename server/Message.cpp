@@ -13,3 +13,6 @@ string Message::getMessageText() {
 	return text;
 }
 
+void Message::setMessageText(string messageText) {
+	text = messageText;
+}
