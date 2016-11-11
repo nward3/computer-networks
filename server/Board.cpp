@@ -32,7 +32,7 @@ void Board::addMessage(string messageText, string username) {
 }
 
 // returns true if removal was successful, ralse otherwise
-bool Board::removeMessage(int messageNum, string user) {
+bool Board::deleteMessage(int messageNum, string user) {
 	int messageIndex = messageNum - 1;
 
 	if (messageIndex < 0 || (unsigned) messageIndex >= messages.size()) {

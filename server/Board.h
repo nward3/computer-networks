@@ -14,7 +14,7 @@ class Board {
 		Board(const Board & board);
 		~Board();
 		void addMessage(string message, string username);
-		bool removeMessage(int messageNum, string user);
+		bool deleteMessage(int messageNum, string user);
 		string getUser() { return user; }
 		string getBoardFileName() { return boardFileName; }
 

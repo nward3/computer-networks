@@ -35,6 +35,7 @@ void promptUserForOperation();
 bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
+void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -140,6 +141,8 @@ int main(int argc, char* argv[]) {
 
 		if (command == "CRT") {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if (command == "DLT") {
+			deleteMessageFromBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if(command == "DST") {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "MSG") {
@@ -166,23 +169,39 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
+	string boardname, messageNumber;
+
+	// get board and message data to send to server
+	cout << "board name: ";
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << "message number: ";
+	cin >> messageNumber;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, messageNumber);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << buf << endl;
+}
+
 void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
 	string boardname, message;
 
 	// get board and message data to send to server
 	cout << "board name: ";
 	cin >> boardname;
-	cout << "message: ";
-	cin >> message;
-
 	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << "message: ";
+	cin >> message;
 	sendMessageUDP(socketDescriptorUDP, sinUDP, message);
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
 
 	cout << buf << endl;
 }
-
 
 /* send & receive board data */
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {

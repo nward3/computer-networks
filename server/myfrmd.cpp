@@ -29,9 +29,11 @@ int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
 void createBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteFile(string filename);
+int stringToInt(string s);
 bool boardExists(unordered_map<string, Board*> &boards, string boardname);
 void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards);
 void addMessageToBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -173,7 +175,13 @@ int main(int argc, char* argv[]) {
 			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &clientaddr);
 			command = buf;
 
-			if (command == "XIT") {
+			if (command == "CRT") {
+				createBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "DLT") {
+				deleteMessageFromBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "MSG") {
+				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "XIT") {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
@@ -186,10 +194,6 @@ int main(int argc, char* argv[]) {
 
 					break;
 				}
-			} else if (command == "CRT") {
-				createBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
-			} else if (command == "MSG") {
-				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else {
 				sendMessageUDP(socketDescriptorUDP, &clientaddr, "Invalid command");
 			}
@@ -197,6 +201,32 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* delete the specified message from the board if the user is the one who posted it */
+void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname;
+	int messageNumber;
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	boardname = buf;
+	sendMessageUDP(socketDescriptor, sin, "ACK");
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	messageNumber = stringToInt(buf);
+
+	if (boardExists(boards, boardname)) {
+		// try to delete the message from the board
+		Board* board = boards[boardname];
+		bool messageDeleted = board->deleteMessage(messageNumber, user);
+		if (messageDeleted) {
+			sendMessageUDP(socketDescriptor, sin, "Message successfully removed");
+		} else {
+			sendMessageUDP(socketDescriptor, sin, "Unable to delete the message. You either don't have permission to delete it or the message doesn't exist");
+		}
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' does not exist");
+	}
 }
 
 /* add the received message to the specified board if the board exists */
@@ -226,6 +256,17 @@ void deleteFile(string filename) {
 		cout << "error: failed to delete file" << endl;
 		exit(1);
 	}
+}
+
+// convert string to integer
+int stringToInt(string s) {
+	stringstream ss;
+	ss << s;
+
+	int i;
+	ss >> i;
+
+	return i;
 }
 
 // returns true if the board exists and false otherwise
