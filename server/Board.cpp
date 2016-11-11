@@ -19,6 +19,10 @@ Board::Board(string boardname, string createdByUser) {
 	boardFileStream << user << endl;
 }
 
+Board::Board(const Board &board) {
+
+}
+
 // close the file stream and delete the board file
 Board::~Board() {
 	boardFileStream.close();
@@ -38,7 +42,7 @@ void Board::addMessage(string message, string username) {
 bool Board::removeMessage(int messageNum) {
 	int messageIndex = messageNum - 1;
 
-	if (messageIndex < 0 || messageIndex >= messages.size()) {
+	if (messageIndex < 0 || (unsigned) messageIndex >= messages.size()) {
 		return false;
 	} else {
 		// delete the message from the vector

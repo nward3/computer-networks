@@ -32,6 +32,7 @@ int sendMessageTCP(int socketDescriptor, string msg);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 void promptUserForOperation();
+bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -146,17 +147,12 @@ int main(int argc, char* argv[]) {
 			close(socketDescriptorUDP);
 			exit(0);
 		} else if (command == "SHT") {
-			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
-			string result = buf;
-
-			if (result == "success") {
+			bool response = shutdownServer(socketDescriptorUDP, buf, bufsize, &sinUDP);
+			if (response) {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
-			} else {
-				cout << buf;
 			}
-
 		} else {
 			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
 			cout << buf;
@@ -165,11 +161,29 @@ int main(int argc, char* argv[]) {
 		cout << endl;
 	}
 
-	free(buf);
 	return 0;
 }
 
+// shut down server. Returns false if shutdown was successful, true otherwise
+bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
+	string adminPassword;
+	cout << "admin password: ";
+	cin >> adminPassword;
+
+	sendMessageUDP(socketDescriptorUDP, sinUDP, adminPassword);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+	string result = buf;
+
+	if (result == "success") {
+		return true;
+	} else {
+		cout << buf;
+		return false;
+	}
+}
+
 void promptUserForOperation() {
+	cout << endl;
 	cout << "Please choose one of the following commands:" << endl;
 	cout << "CRT - create a new message board on the server" << endl;
 	cout << "MSG - leave a message on a board" << endl;
@@ -182,6 +196,7 @@ void promptUserForOperation() {
 	cout << "DST - destroy a board" << endl;
 	cout << "XIT - close connection to server and exit" << endl;
 	cout << "SHT - shutdown the server and exit" << endl;
+	cout << endl;
 }
 
 /* helper function to handle sending a message via udp. handles errors

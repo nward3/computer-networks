@@ -10,6 +10,7 @@ using namespace std;
 class Board {
 	public:
 		Board(string boardname, string user);
+		Board(const Board & board);
 		~Board();
 		void addMessage(string message, string username);
 		bool removeMessage(int messageNum);

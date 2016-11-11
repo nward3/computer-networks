@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+
 #include "Board.h"
 using namespace std;
 
@@ -26,6 +27,7 @@ int sendMessageTCP(int socketDescriptor, string msg);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
+void createBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -33,7 +35,7 @@ int main(int argc, char* argv[]) {
 	unordered_map<string, string> users;
 
 	// message boards - name of board to board itself
-	unordered_map<string, Board> boards;
+	unordered_map<string, Board*> boards;
 
 	// check for proper function invocation
 	if (argc != 3) {
@@ -177,11 +179,15 @@ int main(int argc, char* argv[]) {
 				if (!run) {
 					close(socketDescriptorUDP);
 					close(socketDescriptorTCP);
+
+					break;
 				}
 
-				break;
+			} else if (command == "CRT") {
+				createBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else {
+				sendMessageUDP(socketDescriptorUDP, &clientaddr, "Invalid command");
 			}
-
 		}
 	}
 
@@ -189,18 +195,17 @@ int main(int argc, char* argv[]) {
 }
 
 /* create a new board in the message board forum */
-void createBoard(unordered_map<string, Board> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+void createBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
 	string boardname = buf;
 
 	auto search = boards.find(boardname);
-	if (search != boards.end()) {
-		boards[boardname] = Board(boardname, username);
+	if (search == boards.end()) {
+		boards[boardname] = new Board(boardname, username);
 		sendMessageUDP(socketDescriptor, sin, "board successfully created");
 	} else {
 		sendMessageUDP(socketDescriptor, sin, "board creation failed");
 	}
-
 }
 
 /* shutdown the server */
@@ -212,13 +217,12 @@ bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockadd
 		sendMessageUDP(socketDescriptor, sin, "shutdown");
 
 		// TODO: delete all board files and all appended files
-		
 
-		return true;
+		return false;
 	} else {
 		sendMessageUDP(socketDescriptor, sin, "incorrect password");
 
-		return false;
+		return true;
 	}
 
 }
