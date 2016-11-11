@@ -240,7 +240,7 @@ bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockadd
 	string password = buf;
 
 	if (password == adminPassword) {
-		sendMessageUDP(socketDescriptor, sin, "shutdown");
+		sendMessageUDP(socketDescriptor, sin, "success");
 
 		// TODO: delete all board files and all appended files
 

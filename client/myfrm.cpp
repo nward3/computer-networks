@@ -146,8 +146,8 @@ int main(int argc, char* argv[]) {
 			close(socketDescriptorUDP);
 			exit(0);
 		} else if (command == "SHT") {
-			bool response = shutdownServer(socketDescriptorUDP, buf, bufsize, &sinUDP);
-			if (response) {
+			bool shutDown = shutdownServer(socketDescriptorUDP, buf, bufsize, &sinUDP);
+			if (shutDown) {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
