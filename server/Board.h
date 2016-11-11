@@ -13,11 +13,14 @@ class Board {
 		~Board();
 		void addMessage(string message, string username);
 		bool removeMessage(int messageNum);
+		string getUser() { return user; }
+		string getBoardFileName() { return boardFileName; }
 
 	private:
 		bool fileExists(string filename);
 
 		vector<string> messages;
+		vector<string> filenames;
 		string user;
 		ofstream boardFileStream;
 		string boardFileName;

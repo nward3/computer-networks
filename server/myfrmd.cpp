@@ -26,6 +26,9 @@ int sendMessageTCP(int socketDescriptor, string msg);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
+void deleteFile(string filename);
+void createBoard(unordered_map<string, Board> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards);
 
 int main(int argc, char* argv[]) {
 
@@ -188,6 +191,29 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+/* delete the specified file */
+void deleteFile(string filename) {
+	int status = remove(filename.c_str());
+	if (status != 0) {
+		cout << "error: failed to delete file" << endl;
+		exit(1);
+	}
+}
+
+/* destroy the specified message board */
+void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards) {
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	string boardname = buf;
+
+	auto search = boards.find(boardname);
+	if (search != boards.end() && username == search->second.getUser()) {
+		boards.erase(boardname);
+		sendMessageUDP(socketDescriptor, sin, "success");
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "error trying to delete board");
+	}
+}
+
 /* create a new board in the message board forum */
 void createBoard(unordered_map<string, Board> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
@@ -212,7 +238,7 @@ bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockadd
 		sendMessageUDP(socketDescriptor, sin, "shutdown");
 
 		// TODO: delete all board files and all appended files
-		
+	
 
 		return true;
 	} else {

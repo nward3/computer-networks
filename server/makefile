@@ -5,7 +5,7 @@
 all: myfrmd
 
 myfrmd: myfrmd.cpp
-	g++ myfrmd.cpp -Wall -std=c++11 -o myfrmd
+	g++ myfrmd.cpp Board.cpp -Wall -std=c++11 -o myfrmd
 
 clean:
 	rm myfrmd 
