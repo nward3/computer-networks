@@ -35,6 +35,7 @@ void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_
 void addMessageToBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void editMessage(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+void listBoards(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -182,6 +183,8 @@ int main(int argc, char* argv[]) {
 				deleteMessageFromBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "EDT") {
 				editMessage(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "LIS") {
+				listBoards(boards, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "MSG") {
 				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "XIT") {
@@ -204,6 +207,23 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* sends a string of boardnames (including newlines) to client to display all boards */
+void listBoards(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname;
+
+	stringstream ss;
+
+	if (boards.size() > 0) {
+		for (auto boardname : boards) {
+			ss << "    " << boardname.first << endl;
+		}
+	} else {
+		ss << "No boards listed" << endl;
+	}
+
+	sendMessageUDP(socketDescriptor, sin, ss.str());
 }
 
 /* edits the specified message if the board exists and the user has permission */

@@ -37,6 +37,7 @@ void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize,
 void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
+void listBoards(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -148,6 +149,8 @@ int main(int argc, char* argv[]) {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "EDT") {
 			editMessage(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if (command == "LIS") {
+			listBoards(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "MSG") {
 			addMessageToBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
@@ -170,6 +173,15 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* requests and displays a list of the board names from the server */
+void listBoards(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
+	string boardname, messageNumber, newMessage;
+
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << buf << endl;
 }
 
 /* allows the user to specify a message to edit */
