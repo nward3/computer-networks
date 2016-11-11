@@ -210,6 +210,7 @@ void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_i
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
 	string boardname = buf;
 
+	// check if current user has permission to delete the board (it should be their board)
 	auto search = boards.find(boardname);
 	if (search != boards.end() && username == search->second.getUser()) {
 		boards.erase(boardname);
