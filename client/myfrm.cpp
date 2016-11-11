@@ -33,6 +33,7 @@ int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 void promptUserForOperation();
 bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
+void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -137,11 +138,9 @@ int main(int argc, char* argv[]) {
 		sendMessageUDP(socketDescriptorUDP, &sinUDP, command);
 
 		if (command == "CRT") {
-			string boardname;
-			cin >> boardname;
-			sendMessageUDP(socketDescriptorUDP, &sinUDP, boardname);
-			recvMessageUDP(socketDescriptorUDP, buf, bufsize, &sinUDP);
-			cout << buf << endl;
+			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if(command == "DST") {
+			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
@@ -164,6 +163,15 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+/* send & receive board data */
+void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
+	string boardname;
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+	cout << buf << endl;
+}
+
 // shut down server. Returns false if shutdown was successful, true otherwise
 bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
 	string adminPassword;
@@ -182,6 +190,7 @@ bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sock
 	}
 }
 
+/* lists the possible operations for the message board application */
 void promptUserForOperation() {
 	cout << endl;
 	cout << "Please choose one of the following commands:" << endl;
