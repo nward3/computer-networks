@@ -34,6 +34,7 @@ int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 void promptUserForOperation();
 bool shutdownServer(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
+void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -141,6 +142,8 @@ int main(int argc, char* argv[]) {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if(command == "DST") {
 			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if (command == "MSG") {
+			addMessageToBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
@@ -163,9 +166,28 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
+void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
+	string boardname, message;
+
+	// get board and message data to send to server
+	cout << "board name: ";
+	cin >> boardname;
+	cout << "message: ";
+	cin >> message;
+
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+	sendMessageUDP(socketDescriptorUDP, sinUDP, message);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	cout << buf << endl;
+}
+
+
 /* send & receive board data */
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
 	string boardname;
+	cout << "board name: ";
 	cin >> boardname;
 	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
@@ -249,7 +271,7 @@ int sendMessageTCP(int socketDescriptor, string msg) {
 /* receive data udp style */
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
 	bzero(buf, bufsize);
-	socklen_t addr_len;
+	socklen_t addr_len = sizeof(*sin);
 
 	int recvResult = recvfrom(socketDescriptor, buf, bufsize, 0, (struct sockaddr*)sin, &addr_len);
 	if (recvResult == -1) {

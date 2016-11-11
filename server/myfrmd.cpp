@@ -29,7 +29,9 @@ int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
 void createBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteFile(string filename);
+bool boardExists(unordered_map<string, Board*> &boards, string boardname);
 void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards);
+void addMessageToBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -184,9 +186,10 @@ int main(int argc, char* argv[]) {
 
 					break;
 				}
-
 			} else if (command == "CRT") {
 				createBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
+			} else if (command == "MSG") {
+				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else {
 				sendMessageUDP(socketDescriptorUDP, &clientaddr, "Invalid command");
 			}
@@ -194,6 +197,26 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+/* add the received message to the specified board if the board exists */
+void addMessageToBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname, message;
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	boardname = buf;
+	sendMessageUDP(socketDescriptor, sin, "ACK");
+
+	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
+	message = buf;
+
+	if (boardExists(boards, boardname)) {
+		// add the message to the board
+		Board* board = boards[boardname];
+		board->addMessage(message, user);
+		sendMessageUDP(socketDescriptor, sin, "Your message was added to board '" + boardname + "'");
+	} else {
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' does not exist");
+	}
 }
 
 /* delete the specified file */
@@ -205,14 +228,20 @@ void deleteFile(string filename) {
 	}
 }
 
+// returns true if the board exists and false otherwise
+bool boardExists(unordered_map<string, Board*> &boards, string boardname) {
+	auto search = boards.find(boardname);
+	return search != boards.end();
+}
+
 /* destroy the specified message board */
-void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards) {
+void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board*> &boards) {
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
 	string boardname = buf;
 
 	// check if current user has permission to delete the board (it should be their board)
 	auto search = boards.find(boardname);
-	if (search != boards.end() && username == search->second.getUser()) {
+	if (search != boards.end() && username == search->second->getUser()) {
 		boards.erase(boardname);
 		sendMessageUDP(socketDescriptor, sin, "success");
 	} else {
@@ -250,7 +279,6 @@ bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockadd
 
 		return true;
 	}
-
 }
 
 /* send data udp style */
@@ -292,7 +320,7 @@ int sendMessageTCP(int socketDescriptor, string msg) {
 /* receive data udp style */
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin) {
 	bzero(buf, bufsize);
-	socklen_t addr_len;
+	socklen_t addr_len = sizeof(*sin);
 	
 	int recvResult = recvfrom(socketDescriptor, buf, bufsize, 0, (struct sockaddr*)sin, &addr_len);
 	if (recvResult == -1) {
