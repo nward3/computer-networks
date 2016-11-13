@@ -9,13 +9,10 @@
 #include <sstream>
 #include <string>
 #include <fstream>
-#include <sstream>
 #include <string.h>
 #include <stdlib.h>
-#include <ctime>
 #include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -39,7 +36,9 @@ void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, str
 void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void listBoards(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
+void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 bool fileExists(string filename);
+int stringToInt(string s);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -158,9 +157,9 @@ int main(int argc, char* argv[]) {
 		} else if (command == "RDB") {
 
 		} else if (command == "APN") {
-			
+			appendFileToBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
 		} else if (command == "DWN") {
-
+			downloadFileFromBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
@@ -275,6 +274,50 @@ void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* b
 
 }
 
+/* downloads a file from the board if the file and board exist */
+void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
+	string boardname, filename;
+
+	// get and send board name
+	cout << "board name: ";
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	// get and send file name
+	cout << "file name: ";
+	cin >> filename;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, filename);
+
+	// receive and check size of file to download is valid
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+	int	filesize = stringToInt(buf);
+	if (filesize < 0) {
+		cout << "error: cannot download file" << endl;
+		exit(1);
+	}
+
+	// file exists so create new file with name of file to be downloaded
+	string newBoardFile = boardname + "-" + filename;
+	FILE *fp;
+	fp = fopen(newBoardFile.c_str(), "wb");
+	if (!fp) {
+		cout << "error: cannot open file for writing" << endl;
+		exit(1);
+	}
+	
+	// start receiving file
+	int bytesWritten = 0;
+	int bytesReceived;
+	while (bytesWritten < filesize) {
+		bytesReceived = recvMessageTCP(socketDescriptorTCP, buf, bufsize);
+		fwrite(buf, sizeof(char), bytesReceived, fp);
+		bytesWritten += bytesReceived;
+	}
+	fclose(fp);
+
+}
+
 /* delete the user specified message from the specified board, if it exists */
 void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
 	string boardname, messageNumber;
@@ -355,6 +398,17 @@ void promptUserForOperation() {
 	cout << "XIT - close connection to server and exit" << endl;
 	cout << "SHT - shutdown the server and exit" << endl;
 	cout << endl;
+}
+
+/* converts string to integer */
+int stringToInt(string s) {
+	stringstream ss;
+	ss << s;
+
+	int i;
+	ss >> i;
+
+	return i;
 }
 
 /* helper function to handle sending a message via udp. handles errors

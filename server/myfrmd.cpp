@@ -6,9 +6,14 @@
  */
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -23,7 +28,7 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
-int sendMessageTCP(int socketDescriptor, string msg);
+int sendMessageTCP(int socketDescriptor, string msg, int msglen);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
@@ -36,6 +41,8 @@ void addMessageToBoard(unordered_map<string, Board*> &boards, string username, i
 void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void editMessage(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void listBoards(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
+void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin);
+void downloadFileFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -187,7 +194,14 @@ int main(int argc, char* argv[]) {
 				listBoards(boards, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "MSG") {
 				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
-			} else if (command == "XIT") {
+			} else if (command == "RDB") {
+
+			} else if (command == "APN") {
+				appendFileToBoard(boards, user, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
+			} else if (command == "DWN") {
+				downloadFileFromBoard(boards, user, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
+			}
+			else if (command == "XIT") {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
@@ -362,12 +376,71 @@ void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int s
 	fclose(fp);
 	search->second->appendBoardAttachment(filename);
 
-
 	// add a message to board stating original file name and user that attached it
 	string messageToAdd = "The file: " + filename + " was added by: " + user;
 	search->second->addMessage(messageToAdd, user);
 
 }
+
+/* download a file from the specified board */
+void downloadFileFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname, filename;
+
+	// receive board name
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	boardname = buf;
+	sendMessageUDP(socketDescriptorUDP, sin, "ACK");
+
+	// receive file name
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	filename = buf;
+	
+	// check if board exists
+	if (!boardExists(boards, boardname)) {
+		sendMessageUDP(socketDescriptorUDP, sin, "-1");
+		return;
+	}
+
+	// board exists so check if file is attached to it
+	auto search = boards.find(boardname);
+	bool hasFile = false;
+	for (auto file : search->second->getBoardAttachments()) {
+		if (file == filename) {
+			hasFile = true;
+		}
+	}
+
+	// file is not attached so notify client and wait for next operation
+	if (!hasFile) {
+		sendMessageUDP(socketDescriptorUDP, sin, "-1");
+		return;
+	}
+
+	// file exists on board so calculate and send its size
+	struct stat filestatus;
+	stat(filename.c_str(), &filestatus);
+	ostringstream oss;
+	oss << filestatus.st_size;
+	sendMessageUDP(socketDescriptorUDP, sin, oss.str());
+
+	// open file for reading
+	FILE *fp;
+	fp = fopen(filename.c_str(), "rb");
+	if (!fp) {
+		exit(1);
+	}
+
+	// upload the file to the board
+	int bytesSent = 0;
+	int bytesRead;
+	while (bytesSent < filestatus.st_size) {
+		bytesRead = fread(buf, sizeof(char), bufsize, fp);
+		bytesRead = sendMessageTCP(socketDescriptorTCP, buf, bytesRead);
+		bzero(buf, bufsize);
+		bytesSent += bytesRead;
+	}
+	fclose(fp);
+}	
 
 // convert string to integer
 int stringToInt(string s) {
@@ -449,11 +522,10 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
 }
 
 /* send data tcp style */
-int sendMessageTCP(int socketDescriptor, string msg) {
+int sendMessageTCP(int socketDescriptor, string msg, int msglen) {
 	int bytesSent;
 	int totalBytesSent = 0;
 	const char* buf = msg.c_str();
-	int msglen = msg.length();
 
 	while (totalBytesSent < msglen) {
 		bytesSent = send(socketDescriptor, buf + totalBytesSent, msglen - totalBytesSent, 0);
