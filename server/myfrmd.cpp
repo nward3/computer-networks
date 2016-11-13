@@ -311,6 +311,64 @@ void deleteFile(string filename) {
 	}
 }
 
+/* appends a file to the specified board */
+void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname, filename;
+
+	// receive board name
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	boardname = buf;
+	sendMessageUDP(socketDescriptorUDP, sin, "ACK");
+
+	// receive file name
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	filename = buf;
+
+	// check if board exists
+	if (!boardExists(boards, boardname)) {
+		sendMessageUDP(socketDescriptorUDP, sin, "The board " + boardname + " does not exist");
+		return;
+	}
+
+	// board exists so check if file is already attached to board
+	auto search = boards.find(boardname);
+	for (auto file : search->second->getBoardAttachments()) {
+		if (file == filename) {
+			sendMessageUDP(socketDescriptorUDP, sin, "The file " + filename + " is already appended");
+			return;
+		}
+	}
+
+	// board exists and file can be created so notify client and create file
+	sendMessageUDP(socketDescriptorUDP, sin, "success");
+	string newBoardFile = boardname + "-" + filename;
+	FILE *fp;
+	fp = fopen(newBoardFile.c_str(), "wb");
+	if (!fp) {
+		perror("cannot open file for writing");
+		exit(1);
+	}
+	
+	// receive file size and start file transfer
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	int filesize = stringToInt(buf);
+	int bytesWritten = 0;
+	int bytesReceived;
+	while (bytesWritten < filesize) {
+		bytesReceived = recvMessageTCP(socketDescriptorTCP, buf, bufsize);
+		fwrite(buf, sizeof(char), bytesReceived, fp);
+		bytesWritten += bytesReceived;
+	}
+	fclose(fp);
+	search->second->appendBoardAttachment(filename);
+
+
+	// add a message to board stating original file name and user that attached it
+	string messageToAdd = "The file: " + filename + " was added by: " + user;
+	search->second->addMessage(messageToAdd, user);
+
+}
+
 // convert string to integer
 int stringToInt(string s) {
 	stringstream ss;

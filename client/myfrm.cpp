@@ -28,7 +28,7 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
-int sendMessageTCP(int socketDescriptor, string msg);
+int sendMessageTCP(int socketDescriptor, string msg, int msglen);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 void promptUserForOperation();
@@ -38,6 +38,8 @@ void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct s
 void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void listBoards(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
+void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
+bool fileExists(string filename);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -153,6 +155,12 @@ int main(int argc, char* argv[]) {
 			listBoards(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "MSG") {
 			addMessageToBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
+		} else if (command == "RDB") {
+
+		} else if (command == "APN") {
+			
+		} else if (command == "DWN") {
+
 		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
@@ -206,6 +214,65 @@ void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockadd
 	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
 
 	cout << buf << endl;
+}
+
+/* appends a file to the specified board if the board exists and the file isn't already appended to it */
+void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
+	string boardname, filename, result;
+
+	// get and send board name
+	cout << "board name: ";
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	// get and send file name
+	cout << "file name: ";
+	cin >> filename;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, filename);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+	result = buf;
+
+	// if file cannot be appended, display result and return to prompt user for operation state
+	if (result != "success") {
+		cout << result << endl;
+		return;
+	}
+
+	// file can be appended so check if it exists and its size
+	if (!fileExists(filename)) {
+		cout << "error: file does not exist" << endl;
+		sendMessageUDP(socketDescriptorUDP, sinUDP, "abort");
+
+		return;
+	}
+
+	// determine and send file size
+	struct stat filestatus;
+	stat(filename.c_str(), &filestatus);
+	ostringstream oss;
+	oss << filestatus.st_size;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, oss.str());
+
+	// open file for reading
+	FILE *fp;
+	fp = fopen(filename.c_str(), "rb");
+	if (!fp) {
+		cout << "error: file cannot be read and uploaded" << endl;
+		exit(1);
+	}
+
+	// upload the file to the board
+	int bytesSent = 0;
+	int bytesRead;
+	while (bytesSent < filestatus.st_size) {
+		bytesRead = fread(buf, sizeof(char), bufsize, fp);
+		bytesRead = sendMessageTCP(socketDescriptorTCP, buf, bytesRead);
+		bzero(buf, bufsize);
+		bytesSent += bytesRead;
+	}
+	fclose(fp);
+
 }
 
 /* delete the user specified message from the specified board, if it exists */
@@ -308,11 +375,10 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
 
 /* helper function to handle sending a message to a server via tcp. handles errors
  */
-int sendMessageTCP(int socketDescriptor, string msg) {
+int sendMessageTCP(int socketDescriptor, string msg, int msglen) {
 	int bytesSent;
 	int totalBytesSent = 0;
 	const char* buf = msg.c_str();
-	int msglen = msg.length();
 
 	while (totalBytesSent < msglen) {
 		bytesSent = send(socketDescriptor, buf + totalBytesSent, msglen - totalBytesSent, 0);
@@ -353,4 +419,21 @@ int recvMessageTCP(int socketDescriptor, char* buf, int bufsize) {
 	}
 
 	return recvResult;
+}
+
+/* determine if a file exists */
+bool fileExists(string filename) {
+	
+	if (filename.length() == 0) return 0;
+
+	FILE *fp;
+	bool fileExists = false;
+
+	fp = fopen(filename.c_str(), "r");
+	if (fp != NULL) {
+		fileExists = true;
+		fclose(fp);
+	}
+
+	return fileExists;
 }

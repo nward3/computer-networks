@@ -19,13 +19,13 @@ class Board {
 		string getUser() { return user; }
 		string getBoardFileName() { return boardFileName; }
 		void appendBoardAttachment(string filename);
+		vector<string> getBoardAttachments() { return boardAttachments; }
 
 	private:
 		bool fileExists(string filename);
 
 		vector<Message> messages;
 		vector<string> boardAttachments;
-		vector<string> filenames;
 		string user;
 		string boardFileName;
 };
