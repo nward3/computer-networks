@@ -28,7 +28,7 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
-int sendMessageTCP(int socketDescriptor, string msg, int msglen);
+int sendMessageTCP(int socketDescriptor, char* msg, int msglen);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 bool shutdownServer(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
@@ -319,7 +319,7 @@ void addMessageToBoard(unordered_map<string, Board*> &boards, string user, int s
 /* delete the specified file */
 void deleteFile(string filename) {
 	int status = remove(filename.c_str());
-	if (status != 0) {
+	if (status < 0) {
 		cout << "error: failed to delete file" << endl;
 		exit(1);
 	}
@@ -423,16 +423,18 @@ void downloadFileFromBoard(unordered_map<string, Board*> &boards, string user, i
 	}
 
 	// file exists on board so calculate and send its size
+	string boardFileName = boardname + "-" + filename;
 	struct stat filestatus;
-	stat(filename.c_str(), &filestatus);
+	stat(boardFileName.c_str(), &filestatus);
 	ostringstream oss;
 	oss << filestatus.st_size;
 	sendMessageUDP(socketDescriptorUDP, sin, oss.str());
 
 	// open file for reading
 	FILE *fp;
-	fp = fopen(filename.c_str(), "rb");
+	fp = fopen(boardFileName.c_str(), "rb");
 	if (!fp) {
+		perror("Unable to send attachment");
 		exit(1);
 	}
 
@@ -513,18 +515,11 @@ bool shutdownServer(unordered_map<string, Board*> &boards, int socketDescriptor,
 
 		// delete all boards
 		for (auto board : boards) {
-			
-			// delete all appended files for the particular board
-			string fileToDelete;
-			for (auto file : board.second->getBoardAttachments()) {
-				fileToDelete = board.second->getBoardFileName() + "-" + file;
-				deleteFile(fileToDelete);
-			}
-
 			// delete the dynamically allocated memory for the board
 			delete board.second;
 		}
 
+		// clear the map of board names to pointers of board objects
 		boards.clear();
 
 		return false;
@@ -551,10 +546,9 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
 }
 
 /* send data tcp style */
-int sendMessageTCP(int socketDescriptor, string msg, int msglen) {
+int sendMessageTCP(int socketDescriptor, char* buf, int msglen) {
 	int bytesSent;
 	int totalBytesSent = 0;
-	const char* buf = msg.c_str();
 
 	while (totalBytesSent < msglen) {
 		bytesSent = send(socketDescriptor, buf + totalBytesSent, msglen - totalBytesSent, 0);

@@ -22,11 +22,12 @@ Board::Board(const Board &board) {
 
 // delete all attachments
 Board::~Board() {
-	for (string filename : boardAttachments) {
-		if (fileExists(filename)) {
-			int status = remove(filename.c_str());
-			if (status != 0) {
-				cout << "error: failed to delete file: '" << filename << "'" << endl;
+	for (string attachmentName: boardAttachments) {
+		string attachmentFileName = boardName + '-' + attachmentName;
+		if (fileExists(attachmentFileName)) {
+			int status = remove(attachmentFileName.c_str());
+			if (status < 0) {
+				cout << "error: failed to delete file: '" << attachmentFileName << "'" << endl;
 			}
 		}
 	}

@@ -25,7 +25,7 @@ using namespace std;
 #define MAX_MESSAGE_LENGTH 4096
 
 int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
-int sendMessageTCP(int socketDescriptor, string msg, int msglen);
+int sendMessageTCP(int socketDescriptor, char* buf, int msglen);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
 void promptUserForOperation();
@@ -243,7 +243,7 @@ void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* b
 	// file can be appended so check if it exists and its size
 	if (!fileExists(filename)) {
 		cout << "error: file does not exist" << endl;
-		sendMessageUDP(socketDescriptorUDP, sinUDP, "abort");
+		sendMessageUDP(socketDescriptorUDP, sinUDP, "-1");
 
 		return;
 	}
@@ -317,7 +317,6 @@ void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, cha
 		bytesWritten += bytesReceived;
 	}
 	fclose(fp);
-
 }
 
 /* delete the user specified message from the specified board, if it exists */
@@ -432,10 +431,9 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg) {
 
 /* helper function to handle sending a message to a server via tcp. handles errors
  */
-int sendMessageTCP(int socketDescriptor, string msg, int msglen) {
+int sendMessageTCP(int socketDescriptor, char* buf, int msglen) {
 	int bytesSent;
 	int totalBytesSent = 0;
-	const char* buf = msg.c_str();
 
 	while (totalBytesSent < msglen) {
 		bytesSent = send(socketDescriptor, buf + totalBytesSent, msglen - totalBytesSent, 0);
