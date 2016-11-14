@@ -31,7 +31,7 @@ int sendMessageUDP(int socketDescriptor, struct sockaddr_in* sin, string msg);
 int sendMessageTCP(int socketDescriptor, string msg, int msglen);
 int recvMessageUDP(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 int recvMessageTCP(int socketDescriptor, char* buf, int bufsize);
-bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
+bool shutdownServer(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword);
 void createBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteFile(string filename);
 int stringToInt(string s);
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
 				close(socketDescriptorTCP);
 				break;
 			} else if (command == "SHT") {
-				run = shutdownServer(socketDescriptorUDP, buf, bufsize, &clientaddr, adminPassword);
+				run = shutdownServer(boards, socketDescriptorUDP, buf, bufsize, &clientaddr, adminPassword);
 				
 				if (!run) {
 					close(socketDescriptorUDP);
@@ -499,14 +499,26 @@ void createBoard(unordered_map<string, Board*> &boards, string username, int soc
 }
 
 /* shutdown the server */
-bool shutdownServer(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword) {
+bool shutdownServer(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string adminPassword) {
 	recvMessageUDP(socketDescriptor, buf, bufsize, sin);
 	string password = buf;
 
 	if (password == adminPassword) {
 		sendMessageUDP(socketDescriptor, sin, "success");
 
-		// TODO: delete all board files and all appended files
+		// delete all boards
+		for (auto board : boards) {
+			
+			// delete all appended files for the particular board
+			string fileToDelete;
+			for (auto file : board.second->getBoardAttachments()) {
+				fileToDelete = board.second->getBoardFileName() + "-" + file;
+				deleteFile(fileToDelete);
+			}
+
+			boards.erase(board.second->getBoardFileName());
+		}
+
 
 		return false;
 	} else {
