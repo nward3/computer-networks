@@ -502,9 +502,9 @@ void createBoard(unordered_map<string, Board*> &boards, string username, int soc
 	auto search = boards.find(boardname);
 	if (search == boards.end()) {
 		boards[boardname] = new Board(boardname, username);
-		sendMessageUDP(socketDescriptor, sin, "board successfully created");
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' was successfully created");
 	} else {
-		sendMessageUDP(socketDescriptor, sin, "board creation failed");
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' already exists");
 	}
 }
 
