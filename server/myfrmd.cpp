@@ -172,6 +172,9 @@ int main(int argc, char* argv[]) {
 				loggedOut = false;
 			} else if (users[user] == password) {
 				loggedOut = false;
+			} else {
+				// user already exists but password was incorrect
+				sendMessageUDP(socketDescriptorUDP, &clientaddr, "Incorrect password. Please try again");
 			}
 		}
 		
