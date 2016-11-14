@@ -160,6 +160,8 @@ int main(int argc, char* argv[]) {
 			appendFileToBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
 		} else if (command == "DWN") {
 			downloadFileFromBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
+		} else if (command == "DST") {
+			sendAndReceiveBoardRequest(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "XIT") {
 			close(socketDescriptorTCP);
 			close(socketDescriptorUDP);
@@ -336,6 +338,7 @@ void deleteMessageFromBoard(int socketDescriptorUDP, char* buf, int bufsize, str
 	cout << buf << endl;
 }
 
+/* adds the message to the specified board if the board exists */
 void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP) {
 	string boardname, message;
 
@@ -354,7 +357,7 @@ void addMessageToBoard(int socketDescriptorUDP, char* buf, int bufsize, struct s
 	cout << buf << endl;
 }
 
-/* send & receive board data */
+/* send name of board to perform the specified operation on and receive the operation's result */
 void sendAndReceiveBoardRequest(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
 	string boardname;
 	cout << "board name: ";

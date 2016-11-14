@@ -36,7 +36,7 @@ void createBoard(unordered_map<string, Board*> &boards, string username, int soc
 void deleteFile(string filename);
 int stringToInt(string s);
 bool boardExists(unordered_map<string, Board*> &boards, string boardname);
-void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board> &boards);
+void destroyBoard(int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin, string username, unordered_map<string, Board*> &boards);
 void addMessageToBoard(unordered_map<string, Board*> &boards, string username, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void deleteMessageFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void editMessage(unordered_map<string, Board*> &boards, string user, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
@@ -200,8 +200,9 @@ int main(int argc, char* argv[]) {
 				appendFileToBoard(boards, user, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
 			} else if (command == "DWN") {
 				downloadFileFromBoard(boards, user, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
-			}
-			else if (command == "XIT") {
+			} else if (command == "DST") {
+				destroyBoard(socketDescriptorUDP, buf, bufsize, &clientaddr, user, boards);
+			} else if (command == "XIT") {
 				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
@@ -467,6 +468,15 @@ void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_i
 	// check if current user has permission to delete the board (it should be their board)
 	auto search = boards.find(boardname);
 	if (search != boards.end() && username == search->second->getUser()) {
+		
+		// delete all files appended to the board
+		string fileToDelete;
+		for (string filename : search->second->getBoardAttachments()) {
+			fileToDelete = boardname + "-" + filename;
+			deleteFile(fileToDelete);
+		}
+
+		// delete the board itself and its messages
 		boards.erase(boardname);
 		sendMessageUDP(socketDescriptor, sin, "success");
 	} else {
