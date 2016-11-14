@@ -43,6 +43,7 @@ void editMessage(unordered_map<string, Board*> &boards, string user, int socketD
 void listBoards(unordered_map<string, Board*> &boards, int socketDescriptor, char* buf, int bufsize, struct sockaddr_in* sin);
 void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin);
 void downloadFileFromBoard(unordered_map<string, Board*> &boards, string user, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin);
+void readBoard(unordered_map<string, Board*> &boards, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin);
 
 int main(int argc, char* argv[]) {
 
@@ -198,7 +199,7 @@ int main(int argc, char* argv[]) {
 			} else if (command == "MSG") {
 				addMessageToBoard(boards, user, socketDescriptorUDP, buf, bufsize, &clientaddr);
 			} else if (command == "RDB") {
-
+				readBoard(boards, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
 			} else if (command == "APN") {
 				appendFileToBoard(boards, user, socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &clientaddr);
 			} else if (command == "DWN") {
@@ -326,6 +327,43 @@ void deleteFile(string filename) {
 		cout << "error: failed to delete file" << endl;
 		exit(1);
 	}
+}
+
+/* reads the contents of the specified board */
+void readBoard(unordered_map<string, Board*> &boards, int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sin) {
+	string boardname;
+
+	// receive board name
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	boardname = buf;
+
+	// check if board exists
+	if (!boardExists(boards, boardname)) {
+		sendMessageUDP(socketDescriptorUDP, sin, "-1");
+		return;
+	}
+
+	// determine and send size of board
+	long long boardsize = 0;
+	string msgtext;
+	int msglen;
+	for (auto message : boards[boardname]->getMessages()) {
+		msgtext = message.getUser() + " wrote: " + message.getMessageText() + "\n";
+		msglen = msgtext.length();
+		boardsize += msglen;
+	}
+	ostringstream oss;
+	oss << boardsize;
+	cout << oss.str() << endl;
+	sendMessageUDP(socketDescriptorUDP, sin, oss.str());
+
+	// send all the messages
+	for (auto message : boards[boardname]->getMessages()) {
+		msgtext = message.getUser() + " wrote: " + message.getMessageText() + "\n";
+		msglen = msgtext.length();
+		sendMessageTCP(socketDescriptorTCP, (char*)msgtext.c_str(), msglen);
+	}
+
 }
 
 /* appends a file to the specified board */

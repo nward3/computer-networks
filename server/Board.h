@@ -21,6 +21,7 @@ class Board {
 		string getBoardFileName() { return getBoardName(); }
 		void appendBoardAttachment(string filename);
 		vector<string> getBoardAttachments() { return boardAttachments; }
+		vector<Message> getMessages() { return messages; }
 
 	private:
 		bool fileExists(string filename);
