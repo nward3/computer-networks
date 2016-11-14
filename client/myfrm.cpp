@@ -296,7 +296,7 @@ void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, cha
 	int	filesize = stringToInt(buf);
 	if (filesize < 0) {
 		cout << "error: cannot download file" << endl;
-		exit(1);
+		return;
 	}
 
 	// file exists so create new file with name of file to be downloaded
@@ -307,7 +307,7 @@ void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, cha
 		cout << "error: cannot open file for writing" << endl;
 		exit(1);
 	}
-	
+
 	// start receiving file
 	int bytesWritten = 0;
 	int bytesReceived;

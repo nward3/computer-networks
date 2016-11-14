@@ -11,9 +11,9 @@
 
 using namespace std;
 
-Board::Board(string boardname, string createdByUser) {
-	boardFileName = boardname;
-	user = createdByUser;
+Board::Board(string boardName, string createdByUser) {
+	this->boardName = boardName;
+	this->user = createdByUser;
 }
 
 Board::Board(const Board &board) {

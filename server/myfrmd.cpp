@@ -98,27 +98,27 @@ int main(int argc, char* argv[]) {
 
 	// tcp socket creation
 	socklen_t len;
-	int socketDescriptorTCP;
-	if ((socketDescriptorTCP = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+	int listenSocketDescriptorTCP;
+	if ((listenSocketDescriptorTCP = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 		cout << "error: unable to create tcp socket" << endl;
 		exit(1);
 	}
 
 	// set socket option to allow for reuse
 	int opt = 1;
-	if ((setsockopt(socketDescriptorTCP, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int))) < 0) {
+	if ((setsockopt(listenSocketDescriptorTCP, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int))) < 0) {
 		cout << "error: unable to set up socket for reuse" << endl;
 		exit(1);
 	}
 
 	// bind the tcp socket to the specified address
-	if (bind(socketDescriptorTCP, (struct sockaddr *) &sinTCP, sizeof(sinTCP)) < 0) {
+	if (bind(listenSocketDescriptorTCP, (struct sockaddr *) &sinTCP, sizeof(sinTCP)) < 0) {
 		cout << "error: unable to bind socket" << endl;
 		exit(1);
 	}
 
 	// open the passive socket by listening on the socket
-	if (listen(socketDescriptorTCP, 1)) {
+	if (listen(listenSocketDescriptorTCP, 1)) {
 		cout << "error: unable to listen on socket" << endl;
 		exit(1);
 	}
@@ -133,8 +133,8 @@ int main(int argc, char* argv[]) {
 	while(run) {
 		
 		// try to accept client connection on tcp socket
-		int descriptor;
-		if ((descriptor = accept(socketDescriptorTCP, (struct sockaddr *)&sinTCP, &len)) < 0) {
+		int socketDescriptorTCP;
+		if ((socketDescriptorTCP = accept(listenSocketDescriptorTCP, (struct sockaddr *)&sinTCP, &len)) < 0) {
 			cout << "error: unable to accept client connection" << endl;
 			exit(1);
 		}
@@ -203,7 +203,6 @@ int main(int argc, char* argv[]) {
 			} else if (command == "DST") {
 				destroyBoard(socketDescriptorUDP, buf, bufsize, &clientaddr, user, boards);
 			} else if (command == "XIT") {
-				close(socketDescriptorUDP);
 				close(socketDescriptorTCP);
 				break;
 			} else if (command == "SHT") {
@@ -357,16 +356,22 @@ void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int s
 	// board exists and file can be created so notify client and create file
 	sendMessageUDP(socketDescriptorUDP, sin, "success");
 	string newBoardFile = boardname + "-" + filename;
+
+	// receive file size and start file transfer
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
+	int filesize = stringToInt(buf);
+	if (filesize < 0) {
+		// if the client found that the file to append did not exist, no need to continue
+		return;
+	}
+
 	FILE *fp;
 	fp = fopen(newBoardFile.c_str(), "wb");
 	if (!fp) {
 		perror("cannot open file for writing");
 		exit(1);
 	}
-	
-	// receive file size and start file transfer
-	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sin);
-	int filesize = stringToInt(buf);
+
 	int bytesWritten = 0;
 	int bytesReceived;
 	while (bytesWritten < filesize) {
@@ -516,9 +521,11 @@ bool shutdownServer(unordered_map<string, Board*> &boards, int socketDescriptor,
 				deleteFile(fileToDelete);
 			}
 
-			boards.erase(board.second->getBoardFileName());
+			// delete the dynamically allocated memory for the board
+			delete board.second;
 		}
 
+		boards.clear();
 
 		return false;
 	} else {

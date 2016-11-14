@@ -17,7 +17,8 @@ class Board {
 		bool deleteMessage(int messageNum, string user);
 		bool editMessage(string newMessage, int messageNum, string user);
 		string getUser() { return user; }
-		string getBoardFileName() { return boardFileName; }
+		string getBoardName() { return boardName; }
+		string getBoardFileName() { return getBoardName(); }
 		void appendBoardAttachment(string filename);
 		vector<string> getBoardAttachments() { return boardAttachments; }
 
@@ -27,7 +28,7 @@ class Board {
 		vector<Message> messages;
 		vector<string> boardAttachments;
 		string user;
-		string boardFileName;
+		string boardName;
 };
 
 #endif
