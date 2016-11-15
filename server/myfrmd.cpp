@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
 
 	// data transfer buffer
 	char buf[MAX_MESSAGE_LENGTH];
-	int bufsize = sizeof(buf);
+	int bufsize = sizeof(buf) - 1;
 	string command;
 
 	// wait for connection
@@ -263,7 +263,7 @@ void editMessage(unordered_map<string, Board*> &boards, string user, int socketD
 	if (boardExists(boards, boardname)) {
 		// try to delete the message from the board
 		Board* board = boards[boardname];
-		bool messageDeleted = board->editMessage(newMessage, messageNumber, user);
+		bool messageDeleted = board->editMessage(user + " wrote: " + newMessage, messageNumber, user);
 		if (messageDeleted) {
 			sendMessageUDP(socketDescriptor, sin, "Message successfully updated");
 		} else {
@@ -313,7 +313,7 @@ void addMessageToBoard(unordered_map<string, Board*> &boards, string user, int s
 	if (boardExists(boards, boardname)) {
 		// add the message to the board
 		Board* board = boards[boardname];
-		board->addMessage(message, user);
+		board->addMessage(user + " wrote: " + message, user);
 		sendMessageUDP(socketDescriptor, sin, "Your message was added to board '" + boardname + "'");
 	} else {
 		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' does not exist");
@@ -339,31 +339,43 @@ void readBoard(unordered_map<string, Board*> &boards, int socketDescriptorUDP, i
 
 	// check if board exists
 	if (!boardExists(boards, boardname)) {
-		sendMessageUDP(socketDescriptorUDP, sin, "-1");
+		sendMessageUDP(socketDescriptorUDP, sin, "-2");
 		return;
 	}
 
-	// determine and send size of board
-	long long boardsize = 0;
-	string msgtext;
-	int msglen;
-	for (auto message : boards[boardname]->getMessages()) {
-		msgtext = message.getUser() + " wrote: " + message.getMessageText() + "\n";
-		msglen = msgtext.length();
-		boardsize += msglen;
-	}
-	ostringstream oss;
-	oss << boardsize;
-	cout << oss.str() << endl;
-	sendMessageUDP(socketDescriptorUDP, sin, oss.str());
+	// read eessages data from file and send to client
+	Board* board = boards[boardname];
+	board->writeMessages();
 
-	// send all the messages
-	for (auto message : boards[boardname]->getMessages()) {
-		msgtext = message.getUser() + " wrote: " + message.getMessageText() + "\n";
-		msglen = msgtext.length();
-		sendMessageTCP(socketDescriptorTCP, (char*)msgtext.c_str(), msglen);
+	FILE *fp;
+	fp = fopen(board->getMessagesFileName().c_str(), "r");
+	if (!fp) {
+		perror("Error opening temporary messages file");
+		sendMessageUDP(socketDescriptorUDP, sin, "-1");
+
+		return;
 	}
 
+	struct stat filestatus;
+	stat(board->getMessagesFileName().c_str(), &filestatus);
+	stringstream ss;
+	ss << filestatus.st_size;
+	string filesizeString = ss.str();
+	sendMessageUDP(socketDescriptorUDP, sin, filesizeString);
+
+	// upload the file to the board
+	int bytesSent = 0;
+	int bytesRead = 0;
+	while (bytesSent < filestatus.st_size) {
+		bytesRead = fread(buf, sizeof(char), bufsize, fp);
+		bytesRead = sendMessageTCP(socketDescriptorTCP, buf, bytesRead);
+		bzero(buf, bufsize);
+		bytesSent += bytesRead;
+	}
+
+	fclose(fp);
+
+	board->deleteMessagesFile();
 }
 
 /* appends a file to the specified board */
@@ -420,13 +432,9 @@ void appendFileToBoard(unordered_map<string, Board*> &boards, string user, int s
 		fwrite(buf, sizeof(char), bytesReceived, fp);
 		bytesWritten += bytesReceived;
 	}
+
 	fclose(fp);
-	search->second->appendBoardAttachment(filename);
-
-	// add a message to board stating original file name and user that attached it
-	string messageToAdd = "The file: " + filename + " was added by: " + user;
-	search->second->addMessage(messageToAdd, user);
-
+	search->second->appendBoardAttachment(filename, user);
 }
 
 /* download a file from the specified board */
@@ -526,9 +534,9 @@ void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_i
 
 		// delete the board itself and its messages
 		boards.erase(boardname);
-		sendMessageUDP(socketDescriptor, sin, "success");
+		sendMessageUDP(socketDescriptor, sin, "Board '" + boardname + "' successfully destroyed");
 	} else {
-		sendMessageUDP(socketDescriptor, sin, "error trying to delete board");
+		sendMessageUDP(socketDescriptor, sin, "You do not have permission to delete this board");
 	}
 }
 

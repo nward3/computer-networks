@@ -76,8 +76,12 @@ bool Board::editMessage(string newMessage, int messageNum, string user) {
 }
 
 /* add the file name of an attachment to a list of the board's attachments */
-void Board::appendBoardAttachment(string filename) {
+void Board::appendBoardAttachment(string filename, string user) {
 	boardAttachments.push_back(filename);
+
+	// add a message to board stating original file name and user that attached it
+	string messageToAdd = user + " appended the file: " + filename;
+	addMessage(messageToAdd, user);
 }
 
 bool Board::fileExists (string filename) {
@@ -98,4 +102,31 @@ bool Board::fileExists (string filename) {
 	}
 
 	return fileExists;
+}
+
+// write messages out to a specific temporary file
+void Board::writeMessages() {
+	ofstream ofs;
+	ofs.open(getMessagesFileName().c_str());
+	int messageCount = 1;
+
+	for (auto message : getMessages()) {
+		string msgtext = message.getMessageText();
+		ofs << messageCount << ". " << msgtext << endl;
+		messageCount++;
+	}
+
+	ofs.close();
+}
+
+string Board::getMessagesFileName() {
+	return "messages-" + getBoardName();
+}
+
+// clean up after temporary messages file
+void Board::deleteMessagesFile() {
+	int status = remove(getMessagesFileName().c_str());
+	if (status < 0) {
+		perror("Error cleaning up temporary messages file");
+	}
 }

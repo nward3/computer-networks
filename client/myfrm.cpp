@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	char buf[MAX_MESSAGE_LENGTH];
-	int bufsize = sizeof(buf);
+	int bufsize = sizeof(buf) - 1;
 
 	sendMessageUDP(socketDescriptorUDP, &sinUDP, "init");
 
@@ -199,8 +199,14 @@ void readBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int 
 
 	bytesExpected = stringToLongLong(buf);
 
-	if (bytesExpected < 0) {
+	if (bytesExpected == 0) {
+		cout << "There are no messages to display for board '" + boardname + "'" << endl;
+	} else if (bytesExpected < -1) {
 		cout << "The board '" + boardname + "' does not exist" << endl;
+
+		return;
+	} else if (bytesExpected == -1) {
+		cout << "Error sending messages" << endl;
 
 		return;
 	}
@@ -208,7 +214,7 @@ void readBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int 
 	long long bytesReceived = 0;
 	while (bytesReceived < bytesExpected) {
 		bytesReceived += recvMessageTCP(socketDescriptorTCP, buf, bufsize);
-		cout << buf << endl;
+		cout << buf;
 	}
 }
 

@@ -19,9 +19,12 @@ class Board {
 		string getUser() { return user; }
 		string getBoardName() { return boardName; }
 		string getBoardFileName() { return getBoardName(); }
-		void appendBoardAttachment(string filename);
+		void appendBoardAttachment(string filename, string user);
 		vector<string> getBoardAttachments() { return boardAttachments; }
 		vector<Message> getMessages() { return messages; }
+		void writeMessages();
+		string getMessagesFileName();
+		void deleteMessagesFile();
 
 	private:
 		bool fileExists(string filename);
