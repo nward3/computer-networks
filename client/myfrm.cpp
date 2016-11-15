@@ -37,8 +37,10 @@ void editMessage(int socketDescriptorUDP, char* buf, int bufsize, struct sockadd
 void listBoards(int socketDescriptorUDP, char* buf, int bufsize, struct sockaddr_in * sinUDP);
 void appendFileToBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 void downloadFileFromBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
+void readBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP);
 bool fileExists(string filename);
 int stringToInt(string s);
+long long stringToLongLong(string s);
 
 int main(int argc, char* argv[]) {
 	string hostname;
@@ -155,7 +157,7 @@ int main(int argc, char* argv[]) {
 		} else if (command == "MSG") {
 			addMessageToBoard(socketDescriptorUDP, buf, bufsize, &sinUDP);
 		} else if (command == "RDB") {
-
+			readBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
 		} else if (command == "APN") {
 			appendFileToBoard(socketDescriptorUDP, socketDescriptorTCP, buf, bufsize, &sinUDP);
 		} else if (command == "DWN") {
@@ -182,6 +184,32 @@ int main(int argc, char* argv[]) {
 	}
 
 	return 0;
+}
+
+
+void readBoard(int socketDescriptorUDP, int socketDescriptorTCP, char* buf, int bufsize, struct sockaddr_in* sinUDP) {
+	string boardname;
+	long long bytesExpected;
+
+	// get board and message data to send to server
+	cout << "board name: ";
+	cin >> boardname;
+	sendMessageUDP(socketDescriptorUDP, sinUDP, boardname);
+	recvMessageUDP(socketDescriptorUDP, buf, bufsize, sinUDP);
+
+	bytesExpected = stringToLongLong(buf);
+
+	if (bytesExpected < 0) {
+		cout << "The board '" + boardname + "' does not exist" << endl;
+
+		return;
+	}
+
+	long long bytesReceived = 0;
+	while (bytesReceived < bytesExpected) {
+		bytesReceived += recvMessageTCP(socketDescriptorTCP, buf, bufsize);
+		cout << buf << endl;
+	}
 }
 
 /* requests and displays a list of the board names from the server */
@@ -408,6 +436,17 @@ int stringToInt(string s) {
 	ss << s;
 
 	int i;
+	ss >> i;
+
+	return i;
+}
+
+/* converts a string to long long */
+long long stringToLongLong(string s) {
+	stringstream ss;
+	ss << s;
+
+	long long i;
 	ss >> i;
 
 	return i;
