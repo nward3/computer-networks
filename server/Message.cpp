@@ -1,3 +1,10 @@
+/*
+ * Luke Garrison, Nick Ward
+ * netIDs: lgarriso, nward3
+ *
+ * Implementation for Message class
+ */
+
 #include "Message.h"
 
 Message::Message(string messageText, string userStr) {

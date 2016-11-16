@@ -1,3 +1,10 @@
+/*
+ * Luke Garrison, Nick Ward
+ * netIDs: lgarriso, nward3
+ *
+ * Implementation for Board class
+ */
+
 #include <string>
 #include <vector>
 #include <fstream>

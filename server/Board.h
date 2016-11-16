@@ -1,3 +1,10 @@
+/*
+ * Luke Garrison, Nick Ward
+ * netIDs: lgarriso, nward3
+ *
+ * Interface for Board class
+ */
+
 #ifndef BOARD_H
 #define BOARD_H
 

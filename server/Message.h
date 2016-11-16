@@ -1,3 +1,10 @@
+/*
+ * Luke Garrison, Nick Ward
+ * netIDs: lgarriso, nward3
+ *
+ * Interface for Message class
+ */
+
 #ifndef MESSAGE_H
 #define MESSAGE_H
 

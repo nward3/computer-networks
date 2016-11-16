@@ -15,22 +15,14 @@ contains makefile and myfrm.cpp.
 README.md is the file containing the complete listing and explanation of what files
 are present in the submission and the instructions to run the code.
 
-The server directory's makefile is used to compile myfrmd.cpp, which is the forum's server. myfrmd.cpp is the source code file containing the server for the message board application. The server is started by specifying a port and an admin password and opens the specified port and waits for a client connection. Once a client connects to the server on the appropriate port, the server prompts the client for a username and password. If the username already exists, the password must match, or else the client is re-prompted. If it is a new user, the server will log the user in and record their password. The server will then wait for the client to specify an operation command. The server supports the following operation commands: CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, DST, XIT and SHT. The server will continue to handle operation commands from the client until the client ends the connection with the XIT command or the SHT command. If the client specifies the  XIT command, the client will disconnect from the server, and the server will remain in a "wait for client connection" state. If the client specifies the SHT command and specifies the admin password, the server will delete all of the attachment files from all of the boards and shut down.
+The server directory's makefile is used to compile myfrmd.cpp, which is the forum's server. myfrmd.cpp is the source code file containing the server for the message board application. The server is started by specifying a port and an admin password and opens the specified port and waits for a client connection. Once a client connects to the server on the appropriate port, the server prompts the client for a username and password. If the username already exists, the password must match, or else the client is re-prompted. If it is a new user, the server will log the user in and record their password. The server will then wait for the client to specify an operation command. The server supports the following operation commands: CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, DST, XIT and SHT. The server will continue to handle operation commands from the client until the client ends the connection with the XIT command or the SHT command. If the client specifies the XIT command, the client will disconnect from the server, and the server will remain in a "wait for client connection" state. If the client specifies the SHT command and specifies the admin password, the server will delete all of the attachment files from all of the boards and shut down.
 
-The client directory's makefile is used to compute myfrm.cpp, which is the TCP
-client. myfrm.cpp is the source code file containing the client for the FTP
-application. The TCP client specifies the host name for the server and the port
-it wants to connect on. Once the connection has been established, the client
-can specify one of the following operation commands: REQ, UPL, DEL, LIS, MKD, RMD,
-CHD, and XIT. The REQ command allows the client to download a specified file from
-the server. The UPL command allows the client to upload a specified file to the
-server. The DEL command allows the client to delete the specified file from the
-server. The LIS command allows the client to see the contents (all files and
-directories) of the current directory on the server. The MKD allows the client to
-create a new subdirectory on the server. The CHD command allows the client to
-change the current directory on the server. The RMD command allows the client to
-remove a specific directory from the server if the specific directory is empty.
-Finally, the XIT command closes the connection between the client and the server.
+The client directory's makefile is used to compile myfrm.cpp, which is the 
+client. Then running the client, the user specifies the host name for the server and 
+the por it wants to connect on. Once the connection has been established, the client 
+needs to log in by specifying a username and password. The client can then specify
+one of the following operation commands: CRT, LIS, MSG, DLT, RDB, EDT, APN, DWN, 
+DST, XIT and SHT.
 
 ## How To Run
 
