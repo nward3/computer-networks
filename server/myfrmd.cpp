@@ -535,6 +535,8 @@ void destroyBoard(int socketDescriptor, char*buf, int bufsize, struct sockaddr_i
 		// delete the board itself and its messages
 		boards.erase(boardname);
 		sendMessageUDP(socketDescriptor, sin, "Board '" + boardname + "' successfully destroyed");
+	} else if (search == boards.end()) {
+		sendMessageUDP(socketDescriptor, sin, "The board '" + boardname + "' does not exist");
 	} else {
 		sendMessageUDP(socketDescriptor, sin, "You do not have permission to delete this board");
 	}
